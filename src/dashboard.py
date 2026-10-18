@@ -138,8 +138,9 @@ def write_dashboard(book, summary, meta, labels, data_rows, spark_days) -> None:
     sid, n, ncol = ws.id, len(rows), len(DASHBOARD_HEADER)
     bold = {"textFormat": {"bold": True}}
     requests = [
+        # 見出し行を横に結合するため、列は固定しない（固定列をまたぐ結合はできない）
         {"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {
-            "frozenRowCount": 1, "frozenColumnCount": 1}}, "fields": "gridProperties(frozenRowCount,frozenColumnCount)"}},
+            "frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}},
         {"repeatCell": {"range": _grid(sid, 0, 1, 0, ncol), "cell": {"userEnteredFormat": {
             **bold, "backgroundColor": _rgb("#202124"), "horizontalAlignment": "CENTER",
             "textFormat": {"bold": True, "foregroundColor": _rgb("#ffffff")}}},
