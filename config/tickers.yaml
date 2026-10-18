@@ -2,7 +2,7 @@
 # AI関連は segment が同じ銘柄同士を「競合」として並べる。
 
 groups:
-  # 2026年10月7日 JPX公表 / 2026年10月30日 TOPIX新規採用（35銘柄）
+  # 2026年10月7日 JPX公表 / 2026年10月30日 TOPIX新規採用（35銘柄中34銘柄を監視）
   topix_new_2026_10:
     # --- スタンダード市場（23） ---
     - { ticker: 1723.T, name: 日本電技, market: JP }
@@ -27,7 +27,7 @@ groups:
     - { ticker: 8117.T, name: 中央自動車工業, market: JP }
     - { ticker: 8508.T, name: Jトラスト, market: JP }
     - { ticker: 9436.T, name: 沖縄セルラー電話, market: JP }
-    # TODO: スタンダード市場の残り1銘柄が未特定。JPX公表資料で確認して追加する
+    # ※スタンダード市場の残り1銘柄は未特定のため対象外（合意済み）
     # --- グロース市場（12） ---
     - { ticker: 2160.T, name: ジーエヌアイグループ, market: JP }
     - { ticker: 4478.T, name: フリー, market: JP }
@@ -106,11 +106,23 @@ groups:
     - { ticker: 5802.T, name: 住友電気工業, market: JP, segment: 光通信・電線 }
     - { ticker: GLW, name: Corning, market: US, segment: 光通信・電線 }
     - { ticker: COHR, name: Coherent, market: US, segment: 光通信・電線 }
-    # AIサーバー・データセンター（電源・冷却含む）
+    # AIサーバー・データセンター
     - { ticker: SMCI, name: Super Micro Computer, market: US, segment: サーバー・DC }
     - { ticker: DELL, name: Dell Technologies, market: US, segment: サーバー・DC }
-    - { ticker: VRT, name: Vertiv, market: US, segment: サーバー・DC }
     - { ticker: 3778.T, name: さくらインターネット, market: JP, segment: サーバー・DC }
+    # データセンター向け電源・冷却
+    - { ticker: VRT, name: Vertiv, market: US, segment: 電源・冷却 }
+    - { ticker: ETN, name: Eaton, market: US, segment: 電源・冷却 }
+    - { ticker: GEV, name: GE Vernova, market: US, segment: 電源・冷却 }
+    - { ticker: 6504.T, name: 富士電機, market: JP, segment: 電源・冷却 }
+    - { ticker: 6367.T, name: ダイキン工業, market: JP, segment: 電源・冷却 }
+    - { ticker: 6594.T, name: ニデック, market: JP, segment: 電源・冷却 }
+    # AIソフトウェア（生成AI・AI活用サービス）
+    - { ticker: PLTR, name: Palantir, market: US, segment: AIソフト }
+    - { ticker: 3993.T, name: PKSHA Technology, market: JP, segment: AIソフト }
+    - { ticker: 5574.T, name: ABEJA, market: JP, segment: AIソフト }
+    - { ticker: 4382.T, name: HEROZ, market: JP, segment: AIソフト }
+    - { ticker: 2158.T, name: FRONTEO, market: JP, segment: AIソフト }
     # AIプラットフォーム・クラウド
     - { ticker: MSFT, name: Microsoft, market: US, segment: プラットフォーム }
     - { ticker: GOOGL, name: Alphabet, market: US, segment: プラットフォーム }

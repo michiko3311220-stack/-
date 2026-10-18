@@ -1,0 +1,11 @@
+# 判定ロジックの閾値（仮の値。運用しながら調整する）
+bottom:
+  zone_pct: 5        # 52週安値からの乖離がこの%以内 →「底値圏」
+  approach_pct: 10   # この%以内かつ5日騰落マイナス →「接近中」
+  lookback_days: 252 # 52週 ≒ 252営業日
+trend:
+  short_ma: 5
+  long_ma: 25
+fetch:
+  backfill_period: 1y   # 初回・新規銘柄のバックフィル期間
+  recent_days: 10       # 通常実行時に取り直す営業日数
