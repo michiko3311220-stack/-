@@ -40,8 +40,9 @@ def test_dashboard_rows():
     history = _history()
     summary = analyze.build_summary(history, META, SETTINGS, failed=["9501.T"])
     rows, sections = dashboard.build_dashboard_rows(
-        summary, META, SETTINGS["group_labels"], data_rows=30, spark_days=20)
-    assert rows[0] == dashboard.DASHBOARD_HEADER
+        summary, META, SETTINGS["group_labels"], dates=[f"2026-09-{d:02d}" for d in range(1, 31)],
+        spark_days=20)
+    assert rows[0][5] == "3ヶ月の値動き（9/11〜9/30）"
     assert sections == [1, 4]
     assert rows[1][0] == "■ AI関連｜前工程装置"
     tel = rows[2]
