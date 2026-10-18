@@ -122,6 +122,20 @@ def _recreate(book: gspread.Spreadsheet, title: str, index: int, rows: int, cols
     return book.add_worksheet(title=title, rows=rows, cols=cols, index=index)
 
 
+def _sheet_url(book, gid: int | None = None) -> str:
+    url = f"https://docs.google.com/spreadsheets/d/{book.id}/edit"
+    return url if gid is None else f"{url}#gid={gid}"
+
+
+def _link(url: str, label: str) -> str:
+    return f'=HYPERLINK("{url}","{label}")'
+
+
+def _back_link(book) -> str:
+    # スマホ シートは毎日作り直して gid が変わるため、先頭タブが開く gid なしの URL にする
+    return _link(_sheet_url(book), "◀ スマホに戻る")
+
+
 def _grid(sheet_id, r0, r1, c0, c1) -> dict:
     return {"sheetId": sheet_id, "startRowIndex": r0, "endRowIndex": r1,
             "startColumnIndex": c0, "endColumnIndex": c1}
@@ -185,12 +199,14 @@ def write_dashboard(book, summary, meta, labels, dates, spark_days) -> None:
 
 
 def write_charts(book, chart_data: pd.DataFrame, meta: pd.DataFrame, labels: dict,
-                 data_sheet_id: int, chart_days: int) -> None:
-    """区分（segment）ごとに、競合の指数を重ねた折れ線グラフを作る。"""
+                 data_sheet_id: int, chart_days: int) -> int:
+    """区分（segment）ごとに、競合の指数を重ねた折れ線グラフを作る。シートIDを返す。"""
     blocks = [(g, s, b) for (g, s), b in meta[meta["segment"] != ""].groupby(["group", "segment"], sort=False)]
     ws = _recreate(book, CHARTS_SHEET, 1, 20 * ((len(blocks) + 1) // 2) + 5, 16)
     months = round(chart_days / 21)
-    ws.update([[f"各区分の競合比較：{months}ヶ月前の終値を100とした推移（上にあるほど値上がり）"]], "A1")
+    ws.update([[_back_link(book)],
+               [f"各区分の競合比較：{months}ヶ月前の終値を100とした推移（上にあるほど値上がり）"]],
+              "A1", value_input_option="USER_ENTERED")
     n = len(chart_data) + 1
     col_of = {t: i + 1 for i, t in enumerate(meta["ticker"])}  # 0始まり（A=日付）
     requests = []
@@ -214,6 +230,7 @@ def write_charts(book, chart_data: pd.DataFrame, meta: pd.DataFrame, labels: dic
                 "widthPixels": 620, "heightPixels": 360}},
         }}})
     book.batch_update({"requests": requests})
+    return ws.id
 
 
 def _write_wide(book, title: str, header: list[str], frame: pd.DataFrame, input_option: str,
@@ -276,14 +293,15 @@ def _single_chart_requests(sid: int, select: tuple[int, int], data_col: int, anc
     ]
 
 
-def write_single_chart(book, default_name: str) -> None:
+def write_single_chart(book, default_name: str) -> int:
     """個別チャートのシートを作る。選んだ銘柄が毎日リセットされないよう、既にあれば作り直さない。
 
     レイアウトを変えたときは、スプレッドシート上でこのシートを削除すれば次回作り直される。
     """
     try:
-        book.worksheet(SINGLE_SHEET)
-        return
+        ws = book.worksheet(SINGLE_SHEET)
+        ws.update([[_back_link(book)]], "A2", value_input_option="USER_ENTERED")
+        return ws.id
     except gspread.WorksheetNotFound:
         pass
     ws = book.add_worksheet(title=SINGLE_SHEET, rows=CLOSE_ROWS + 5, cols=14, index=3)
@@ -299,13 +317,17 @@ def write_single_chart(book, default_name: str) -> None:
         _width(sid, 1, 2, 220),
         *_single_chart_requests(sid, (0, 1), 10, (2, 0), (960, 480)),
     ]})
+    ws.update([[_back_link(book)]], "A2", value_input_option="USER_ENTERED")
+    return sid
 
 
 # スマホ用シートのレイアウト（行・列は0始まり）
+#   0行目: 他シートへのリンクボタン / 1行目: 銘柄プルダウン / 2行目〜: グラフ / その下: 一覧
 MOBILE_HEADER = ["銘柄", "前日比", "3ヶ月", "底値"]
 MOBILE_WIDTHS = [118, 58, 118, 62]       # 合計 356px（スマホ縦画面に収まる幅）
+MOBILE_SELECT_ROW = 1
 MOBILE_CHART_ROWS = 13                   # グラフを置く行数（1行21px）
-MOBILE_LIST_ROW = 1 + MOBILE_CHART_ROWS  # 一覧の見出し行
+MOBILE_LIST_ROW = 2 + MOBILE_CHART_ROWS  # 一覧の見出し行
 MOBILE_DATA_COL = 26                     # グラフ元データの列（AA〜AD）
 
 
@@ -319,11 +341,16 @@ def build_mobile_rows(summary: pd.DataFrame, meta: pd.DataFrame, labels: dict,
     return out, sections
 
 
-def write_mobile(book, summary, meta, labels, dates, spark_days, default_name: str) -> None:
-    """スマホで見る用のシート。毎日作り直すが、選んでいた銘柄は引き継ぐ。"""
+def write_mobile(book, summary, meta, labels, dates, spark_days, default_name: str,
+                 links: list[tuple[str, int]]) -> None:
+    """スマホで見る用のシート。毎日作り直すが、選んでいた銘柄は引き継ぐ。
+
+    links は一番上に並べるボタン（表示名, シートID）。2つまで（2列ずつ結合して並べる）。
+    """
     names = set(meta["name"])
+    select_a1 = rowcol_to_a1(MOBILE_SELECT_ROW + 1, 2)
     try:
-        selected = book.worksheet(MOBILE_SHEET).acell("B1").value
+        selected = book.worksheet(MOBILE_SHEET).acell(select_a1).value
     except gspread.WorksheetNotFound:
         selected = None
     if selected not in names:
@@ -332,19 +359,32 @@ def write_mobile(book, summary, meta, labels, dates, spark_days, default_name: s
     rows, sections = build_mobile_rows(summary, meta, labels, dates, spark_days)
     n_rows = max(MOBILE_LIST_ROW + len(rows), CLOSE_ROWS) + 5
     ws = _recreate(book, MOBILE_SHEET, 0, n_rows, MOBILE_DATA_COL + 4)
-    ws.update([["銘柄▶", selected]], "A1", value_input_option="USER_ENTERED")
+    buttons = [_link(_sheet_url(book, gid), label) for label, gid in links[:2]]
+    ws.update([[buttons[0] if buttons else "", "", buttons[1] if len(buttons) > 1 else "", ""],
+               ["銘柄▶", selected]], "A1", value_input_option="USER_ENTERED")
     ws.update(rows, rowcol_to_a1(MOBILE_LIST_ROW + 1, 1), value_input_option="USER_ENTERED")
-    ws.update(_single_chart_values("$B$1", MOBILE_DATA_COL + 1), rowcol_to_a1(1, MOBILE_DATA_COL + 1), value_input_option="USER_ENTERED")
+    ws.update(_single_chart_values("$" + select_a1[0] + "$" + select_a1[1:], MOBILE_DATA_COL + 1), rowcol_to_a1(1, MOBILE_DATA_COL + 1), value_input_option="USER_ENTERED")
 
     sid, top, ncol = ws.id, MOBILE_LIST_ROW, len(MOBILE_HEADER)
     end = top + len(rows)
     small = {"textFormat": {"fontSize": 9}}
     requests = [
-        {"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {"frozenRowCount": 1}},
+        # リンクボタンとプルダウンは、下にスクロールしても常に見えるよう固定
+        {"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {"frozenRowCount": 2}},
                                    "fields": "gridProperties.frozenRowCount"}},
         *[_width(sid, i, i + 1, w) for i, w in enumerate(MOBILE_WIDTHS)],
-        {"mergeCells": {"range": _grid(sid, 0, 1, 1, ncol), "mergeType": "MERGE_ALL"}},
+        {"mergeCells": {"range": _grid(sid, 0, 1, 0, 2), "mergeType": "MERGE_ALL"}},
+        {"mergeCells": {"range": _grid(sid, 0, 1, 2, 4), "mergeType": "MERGE_ALL"}},
         {"repeatCell": {"range": _grid(sid, 0, 1, 0, ncol), "cell": {"userEnteredFormat": {
+            "textFormat": {"bold": True, "underline": False, "foregroundColor": _rgb("#ffffff")},
+            "backgroundColor": _rgb("#1a73e8"), "horizontalAlignment": "CENTER",
+            "verticalAlignment": "MIDDLE", "borders": {
+                side: {"style": "SOLID_THICK", "color": _rgb("#ffffff")} for side in ("left", "right")}}},
+            "fields": "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment,verticalAlignment,borders)"}},
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
+                                       "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
+        {"mergeCells": {"range": _grid(sid, 1, 2, 1, ncol), "mergeType": "MERGE_ALL"}},
+        {"repeatCell": {"range": _grid(sid, 1, 2, 0, ncol), "cell": {"userEnteredFormat": {
             "textFormat": {"bold": True}, "backgroundColor": _rgb("#fff2cc")}},
             "fields": "userEnteredFormat(textFormat,backgroundColor)"}},
         {"repeatCell": {"range": _grid(sid, top, end, 0, ncol), "cell": {"userEnteredFormat": {
@@ -362,7 +402,8 @@ def write_mobile(book, summary, meta, labels, dates, spark_days, default_name: s
                                        "properties": {"pixelSize": 34}, "fields": "pixelSize"}},
         _sign_rule(sid, 1, end, "NUMBER_GREATER", UP), _sign_rule(sid, 1, end, "NUMBER_LESS", DOWN),
         *[_text_rule(sid, 3, end, text, bg) for text, bg in SIGNAL_BG.items()],
-        *_single_chart_requests(sid, (0, 1), MOBILE_DATA_COL, (1, 0), (sum(MOBILE_WIDTHS), 21 * MOBILE_CHART_ROWS),
+        *_single_chart_requests(sid, (MOBILE_SELECT_ROW, 1), MOBILE_DATA_COL, (MOBILE_SELECT_ROW + 1, 0),
+                                (sum(MOBILE_WIDTHS), 21 * MOBILE_CHART_ROWS),
                                 compact=True),
     ]
     for r in sections:
@@ -391,6 +432,7 @@ def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFra
 
     dates = data["日付"].tolist()
     write_dashboard(book, summary, meta, labels, dates, view["sparkline_days"])
-    write_charts(book, data, meta, labels, data_ws.id, view["chart_days"])
-    write_single_chart(book, default_name=names[0])
-    write_mobile(book, summary, meta, labels, dates, view["sparkline_days"], default_name=names[0])
+    charts_id = write_charts(book, data, meta, labels, data_ws.id, view["chart_days"])
+    single_id = write_single_chart(book, default_name=names[0])
+    write_mobile(book, summary, meta, labels, dates, view["sparkline_days"], default_name=names[0],
+                 links=[("📊 区分別グラフ", charts_id), ("📈 個別チャート", single_id)])
