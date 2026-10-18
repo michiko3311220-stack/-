@@ -52,3 +52,17 @@ def test_dashboard_rows():
     failed = rows[5]
     assert failed[5] == "" and failed[9] == "取得失敗"
     assert all(len(r) == len(dashboard.DASHBOARD_HEADER) for r in rows)
+
+
+def test_mobile_rows():
+    summary = analyze.build_summary(_history(), META, SETTINGS, failed=["9501.T"])
+    rows, sections = dashboard.build_mobile_rows(
+        summary, META, SETTINGS["group_labels"], dates=[f"2026-09-{d:02d}" for d in range(1, 31)],
+        spark_days=20)
+    assert rows[0] == dashboard.MOBILE_HEADER
+    assert sections == [1, 4]
+    assert rows[1] == ["■ AI関連｜前工程装置", "", "", ""]
+    assert rows[2][0] == "東京エレクトロン" and rows[2][2].startswith("=SPARKLINE(")
+    assert rows[5] == ["東京電力HD", "", "", "取得失敗"]
+    assert all(len(r) == 4 for r in rows)
+    assert sum(dashboard.MOBILE_WIDTHS) <= 360

@@ -5,6 +5,7 @@
 - ダッシュボード : 1行 = 1銘柄。SPARKLINE で値動きと52週レンジの位置を表示
 - 区分別グラフ   : 区分ごとに競合の指数を1枚の折れ線グラフで比較
 - 個別チャート   : プルダウンで選んだ銘柄の1年チャート（月の目盛り・52週安値/高値の線つき）
+- スマホ        : スマホ縦画面の幅に収まる 個別チャート + 4列の一覧
 """
 import gspread
 import numpy as np
@@ -21,6 +22,7 @@ CLOSE_LAST_COL = rowcol_to_a1(1, CLOSE_COLS).rstrip("1")
 SINGLE_SHEET = "個別チャート"
 DASHBOARD_SHEET = "ダッシュボード"
 CHARTS_SHEET = "区分別グラフ"
+MOBILE_SHEET = "スマホ"
 
 DASHBOARD_HEADER = ["銘柄名", "コード", "終値", "前日比(%)", "25日騰落(%)", "3ヶ月の値動き",
                     "52週の位置（安値◀▶高値）", "安値から(%)", "トレンド", "底値シグナル", "日付"]
@@ -228,6 +230,52 @@ def _write_wide(book, title: str, header: list[str], frame: pd.DataFrame, input_
     return ws
 
 
+def _single_chart_values(select_cell: str, first_col: int) -> list[list]:
+    """select_cell で選んだ銘柄の列を chart_close から引いてくる4列（日付・終値・52週安値・52週高値）。"""
+    src = f"{CLOSE_SHEET}!$B$1:${CLOSE_LAST_COL}$1"
+    c = rowcol_to_a1(1, first_col + 1).rstrip("1")  # 終値の列（日付の右隣）
+    return [["日付", f"={select_cell}", "52週安値", "52週高値"], [
+        f"=ARRAYFORMULA({CLOSE_SHEET}!A2:A{CLOSE_ROWS})",
+        f"=INDEX({CLOSE_SHEET}!B2:{CLOSE_LAST_COL}{CLOSE_ROWS},0,MATCH({select_cell},{src},0))",
+        f'=ARRAYFORMULA(IF({c}2:{c}="","",MIN({c}2:{c})))',
+        f'=ARRAYFORMULA(IF({c}2:{c}="","",MAX({c}2:{c})))',
+    ]]
+
+
+def _single_chart_requests(sid: int, select: tuple[int, int], data_col: int, anchor: tuple[int, int],
+                           size: tuple[int, int], compact: bool = False) -> list[dict]:
+    """プルダウン（select の位置）と、data_col から4列のデータを使う折れ線グラフを作るリクエスト。"""
+    gray = {"red": 0.6, "green": 0.6, "blue": 0.6}
+    col = lambda c: _grid(sid, 0, CLOSE_ROWS, c, c + 1)  # noqa: E731
+    series = [
+        {"series": {"sourceRange": {"sources": [col(data_col + 1)]}}, "targetAxis": "LEFT_AXIS",
+         "color": _rgb("#1a73e8"), "lineStyle": {"width": 2}},
+        *[{"series": {"sourceRange": {"sources": [col(c)]}}, "targetAxis": "LEFT_AXIS",
+           "color": gray, "lineStyle": {"width": 1, "type": "MEDIUM_DASHED"}} for c in (data_col + 2, data_col + 3)],
+    ]
+    r, c = select
+    return [
+        {"setDataValidation": {"range": _grid(sid, r, r + 1, c, c + 1), "rule": {
+            "condition": {"type": "ONE_OF_RANGE",
+                          "values": [{"userEnteredValue": f"={CLOSE_SHEET}!$B$1:${CLOSE_LAST_COL}$1"}]},
+            "showCustomUi": True, "strict": True}}},
+        {"addChart": {"chart": {
+            "spec": {"basicChart": {
+                "chartType": "LINE",
+                "legendPosition": "NO_LEGEND" if compact else "TOP_LEGEND",
+                "headerCount": 1,
+                "axis": [{"position": "BOTTOM_AXIS"},
+                         {"position": "LEFT_AXIS", **({} if compact else {"title": "終値"})}],
+                "domains": [{"domain": {"sourceRange": {"sources": [col(data_col)]}}}],
+                "series": series,
+            }},
+            "position": {"overlayPosition": {"anchorCell": {"sheetId": sid, "rowIndex": anchor[0],
+                                                            "columnIndex": anchor[1]},
+                                             "widthPixels": size[0], "heightPixels": size[1]}},
+        }}},
+    ]
+
+
 def write_single_chart(book, default_name: str) -> None:
     """個別チャートのシートを作る。選んだ銘柄が毎日リセットされないよう、既にあれば作り直さない。
 
@@ -238,52 +286,93 @@ def write_single_chart(book, default_name: str) -> None:
         return
     except gspread.WorksheetNotFound:
         pass
-    ws = book.add_worksheet(title=SINGLE_SHEET, rows=CLOSE_ROWS + 5, cols=14, index=2)
-    src = f"{CLOSE_SHEET}!$B$1:${CLOSE_LAST_COL}$1"
+    ws = book.add_worksheet(title=SINGLE_SHEET, rows=CLOSE_ROWS + 5, cols=14, index=3)
     ws.update([
         ["銘柄を選択 ▶", default_name, "", "↓ 1年分の終値（グレーの点線が52週の安値・高値）"],
     ], "A1", value_input_option="USER_ENTERED")
-    # グラフの元データ（K〜N列）。B1 で選んだ銘柄の列を chart_close から引いてくる
-    ws.update([[
-        "日付",
-        "=B1",
-        "52週安値",
-        "52週高値",
-    ], [
-        f"=ARRAYFORMULA({CLOSE_SHEET}!A2:A{CLOSE_ROWS})",
-        f"=INDEX({CLOSE_SHEET}!B2:{CLOSE_LAST_COL}{CLOSE_ROWS},0,MATCH($B$1,{src},0))",
-        '=ARRAYFORMULA(IF(L2:L="","",MIN(L2:L)))',
-        '=ARRAYFORMULA(IF(L2:L="","",MAX(L2:L)))',
-    ]], "K1", value_input_option="USER_ENTERED")
+    ws.update(_single_chart_values("$B$1", 11), "K1", value_input_option="USER_ENTERED")  # グラフの元データ（K〜N列）
     sid = ws.id
-    gray = {"red": 0.6, "green": 0.6, "blue": 0.6}
-    series = [
-        {"series": {"sourceRange": {"sources": [_grid(sid, 0, CLOSE_ROWS, 11, 12)]}}, "targetAxis": "LEFT_AXIS",
-         "color": _rgb("#1a73e8"), "lineStyle": {"width": 2}},
-        *[{"series": {"sourceRange": {"sources": [_grid(sid, 0, CLOSE_ROWS, c, c + 1)]}}, "targetAxis": "LEFT_AXIS",
-           "color": gray, "lineStyle": {"width": 1, "type": "MEDIUM_DASHED"}} for c in (12, 13)],
-    ]
     book.batch_update({"requests": [
-        {"setDataValidation": {"range": _grid(sid, 0, 1, 1, 2), "rule": {
-            "condition": {"type": "ONE_OF_RANGE", "values": [{"userEnteredValue": "=" + src}]},
-            "showCustomUi": True, "strict": True}}},
         {"repeatCell": {"range": _grid(sid, 0, 1, 0, 2), "cell": {"userEnteredFormat": {
             "textFormat": {"bold": True, "fontSize": 12}, "backgroundColor": _rgb("#fff2cc")}},
             "fields": "userEnteredFormat(textFormat,backgroundColor)"}},
         _width(sid, 1, 2, 220),
-        {"addChart": {"chart": {
-            "spec": {"basicChart": {
-                "chartType": "LINE",
-                "legendPosition": "TOP_LEGEND",
-                "headerCount": 1,
-                "axis": [{"position": "BOTTOM_AXIS"}, {"position": "LEFT_AXIS", "title": "終値"}],
-                "domains": [{"domain": {"sourceRange": {"sources": [_grid(sid, 0, CLOSE_ROWS, 10, 11)]}}}],
-                "series": series,
-            }},
-            "position": {"overlayPosition": {"anchorCell": {"sheetId": sid, "rowIndex": 2, "columnIndex": 0},
-                                             "widthPixels": 960, "heightPixels": 480}},
-        }}},
+        *_single_chart_requests(sid, (0, 1), 10, (2, 0), (960, 480)),
     ]})
+
+
+# スマホ用シートのレイアウト（行・列は0始まり）
+MOBILE_HEADER = ["銘柄", "前日比", "3ヶ月", "底値"]
+MOBILE_WIDTHS = [118, 58, 118, 62]       # 合計 356px（スマホ縦画面に収まる幅）
+MOBILE_CHART_ROWS = 13                   # グラフを置く行数（1行21px）
+MOBILE_LIST_ROW = 1 + MOBILE_CHART_ROWS  # 一覧の見出し行
+MOBILE_DATA_COL = 26                     # グラフ元データの列（AA〜AD）
+
+
+def build_mobile_rows(summary: pd.DataFrame, meta: pd.DataFrame, labels: dict,
+                      dates: list[str], spark_days: int) -> tuple[list[list], list[int]]:
+    """スマホ用の一覧（見出し行つき）と、区分見出し行の位置（一覧内、0始まり）を返す。"""
+    rows, sections = build_dashboard_rows(summary, meta, labels, dates, spark_days)
+    out = [MOBILE_HEADER]
+    for i, r in enumerate(rows[1:], start=1):
+        out.append([r[0], "", "", ""] if i in sections else [r[0], r[3], r[5], r[9]])
+    return out, sections
+
+
+def write_mobile(book, summary, meta, labels, dates, spark_days, default_name: str) -> None:
+    """スマホで見る用のシート。毎日作り直すが、選んでいた銘柄は引き継ぐ。"""
+    names = set(meta["name"])
+    try:
+        selected = book.worksheet(MOBILE_SHEET).acell("B1").value
+    except gspread.WorksheetNotFound:
+        selected = None
+    if selected not in names:
+        selected = default_name
+
+    rows, sections = build_mobile_rows(summary, meta, labels, dates, spark_days)
+    n_rows = max(MOBILE_LIST_ROW + len(rows), CLOSE_ROWS) + 5
+    ws = _recreate(book, MOBILE_SHEET, 0, n_rows, MOBILE_DATA_COL + 4)
+    ws.update([["銘柄▶", selected]], "A1", value_input_option="USER_ENTERED")
+    ws.update(rows, rowcol_to_a1(MOBILE_LIST_ROW + 1, 1), value_input_option="USER_ENTERED")
+    ws.update(_single_chart_values("$B$1", MOBILE_DATA_COL + 1), rowcol_to_a1(1, MOBILE_DATA_COL + 1), value_input_option="USER_ENTERED")
+
+    sid, top, ncol = ws.id, MOBILE_LIST_ROW, len(MOBILE_HEADER)
+    end = top + len(rows)
+    small = {"textFormat": {"fontSize": 9}}
+    requests = [
+        {"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {"frozenRowCount": 1}},
+                                   "fields": "gridProperties.frozenRowCount"}},
+        *[_width(sid, i, i + 1, w) for i, w in enumerate(MOBILE_WIDTHS)],
+        {"mergeCells": {"range": _grid(sid, 0, 1, 1, ncol), "mergeType": "MERGE_ALL"}},
+        {"repeatCell": {"range": _grid(sid, 0, 1, 0, ncol), "cell": {"userEnteredFormat": {
+            "textFormat": {"bold": True}, "backgroundColor": _rgb("#fff2cc")}},
+            "fields": "userEnteredFormat(textFormat,backgroundColor)"}},
+        {"repeatCell": {"range": _grid(sid, top, end, 0, ncol), "cell": {"userEnteredFormat": {
+            **small, "wrapStrategy": "WRAP", "verticalAlignment": "MIDDLE"}},
+            "fields": "userEnteredFormat(textFormat,wrapStrategy,verticalAlignment)"}},
+        {"repeatCell": {"range": _grid(sid, top, top + 1, 0, ncol), "cell": {"userEnteredFormat": {
+            "textFormat": {"bold": True, "fontSize": 9, "foregroundColor": _rgb("#ffffff")},
+            "backgroundColor": _rgb("#202124"), "horizontalAlignment": "CENTER"}},
+            "fields": "userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)"}},
+        {"repeatCell": {"range": _grid(sid, top + 1, end, 1, 2), "cell": {"userEnteredFormat": {
+            "numberFormat": {"type": "NUMBER", "pattern": '+0.0"%";-0.0"%";0.0"%"'}}},
+            "fields": "userEnteredFormat.numberFormat"}},
+        {"updateDimensionProperties": {"range": {"sheetId": sid, "dimension": "ROWS",
+                                                 "startIndex": top + 1, "endIndex": end},
+                                       "properties": {"pixelSize": 34}, "fields": "pixelSize"}},
+        _sign_rule(sid, 1, end, "NUMBER_GREATER", UP), _sign_rule(sid, 1, end, "NUMBER_LESS", DOWN),
+        *[_text_rule(sid, 3, end, text, bg) for text, bg in SIGNAL_BG.items()],
+        *_single_chart_requests(sid, (0, 1), MOBILE_DATA_COL, (1, 0), (sum(MOBILE_WIDTHS), 21 * MOBILE_CHART_ROWS),
+                                compact=True),
+    ]
+    for r in sections:
+        requests += [
+            {"mergeCells": {"range": _grid(sid, top + r, top + r + 1, 0, ncol), "mergeType": "MERGE_ALL"}},
+            {"repeatCell": {"range": _grid(sid, top + r, top + r + 1, 0, ncol), "cell": {"userEnteredFormat": {
+                "textFormat": {"bold": True, "fontSize": 9}, "backgroundColor": _rgb(SECTION_BG)}},
+                "fields": "userEnteredFormat(textFormat,backgroundColor)"}},
+        ]
+    book.batch_update({"requests": requests})
 
 
 def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFrame,
@@ -300,6 +389,8 @@ def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFra
     _write_wide(book, CLOSE_SHEET, ["日付"] + names, close.reset_index(drop=True), "USER_ENTERED",
                 min_rows=CLOSE_ROWS, min_cols=CLOSE_COLS)
 
-    write_dashboard(book, summary, meta, labels, data["日付"].tolist(), view["sparkline_days"])
+    dates = data["日付"].tolist()
+    write_dashboard(book, summary, meta, labels, dates, view["sparkline_days"])
     write_charts(book, data, meta, labels, data_ws.id, view["chart_days"])
     write_single_chart(book, default_name=names[0])
+    write_mobile(book, summary, meta, labels, dates, view["sparkline_days"], default_name=names[0])
