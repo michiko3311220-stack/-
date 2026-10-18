@@ -1,0 +1,119 @@
+# 監視銘柄の正本。ticker は Yahoo Finance 形式。
+# AI関連は segment が同じ銘柄同士を「競合」として並べる。
+
+groups:
+  # 2026年10月7日 JPX公表 / 2026年10月30日 TOPIX新規採用（35銘柄）
+  topix_new_2026_10:
+    # --- スタンダード市場（23） ---
+    - { ticker: 1723.T, name: 日本電技, market: JP }
+    - { ticker: 1965.T, name: テクノ菱和, market: JP }
+    - { ticker: 2702.T, name: 日本マクドナルドHD, market: JP }
+    - { ticker: 2782.T, name: セリア, market: JP }
+    - { ticker: 2805.T, name: ヱスビー食品, market: JP }
+    - { ticker: 4107.T, name: 伊勢化学工業, market: JP }
+    - { ticker: 4816.T, name: 東映アニメーション, market: JP }
+    - { ticker: 4966.T, name: 上村工業, market: JP }
+    - { ticker: 5161.T, name: 西川ゴム工業, market: JP }
+    - { ticker: 6227.T, name: AIメカテック, market: JP }
+    - { ticker: 6366.T, name: 千代田化工建設, market: JP }
+    - { ticker: 6736.T, name: サン電子, market: JP }
+    - { ticker: 6834.T, name: 精工技研, market: JP }
+    - { ticker: 6890.T, name: フェローテック, market: JP }
+    - { ticker: 6960.T, name: フクダ電子, market: JP }
+    - { ticker: 7287.T, name: 日本精機, market: JP }
+    - { ticker: 7564.T, name: ワークマン, market: JP }
+    - { ticker: 7716.T, name: ナカニシ, market: JP }
+    - { ticker: 7906.T, name: ヨネックス, market: JP }
+    - { ticker: 8117.T, name: 中央自動車工業, market: JP }
+    - { ticker: 8508.T, name: Jトラスト, market: JP }
+    - { ticker: 9436.T, name: 沖縄セルラー電話, market: JP }
+    # TODO: スタンダード市場の残り1銘柄が未特定。JPX公表資料で確認して追加する
+    # --- グロース市場（12） ---
+    - { ticker: 2160.T, name: ジーエヌアイグループ, market: JP }
+    - { ticker: 4478.T, name: フリー, market: JP }
+    - { ticker: 4588.T, name: オンコリスバイオファーマ, market: JP }
+    - { ticker: 6613.T, name: QDレーザ, market: JP }
+    - { ticker: 7806.T, name: MTG, market: JP }
+    - { ticker: 141A.T, name: トライアルHD, market: JP }
+    - { ticker: 186A.T, name: アストロスケールHD, market: JP }
+    - { ticker: 215A.T, name: タイミー, market: JP }
+    - { ticker: 290A.T, name: Synspective, market: JP }
+    - { ticker: 485A.T, name: パワーエックス, market: JP }
+    - { ticker: 581A.T, name: GO, market: JP }
+    - { ticker: 593A.T, name: ティアフォー, market: JP }
+
+  # 電力会社
+  power:
+    - { ticker: 9501.T, name: 東京電力HD, market: JP, segment: 大手電力 }
+    - { ticker: 9502.T, name: 中部電力, market: JP, segment: 大手電力 }
+    - { ticker: 9503.T, name: 関西電力, market: JP, segment: 大手電力 }
+    - { ticker: 9504.T, name: 中国電力, market: JP, segment: 大手電力 }
+    - { ticker: 9505.T, name: 北陸電力, market: JP, segment: 大手電力 }
+    - { ticker: 9506.T, name: 東北電力, market: JP, segment: 大手電力 }
+    - { ticker: 9507.T, name: 四国電力, market: JP, segment: 大手電力 }
+    - { ticker: 9508.T, name: 九州電力, market: JP, segment: 大手電力 }
+    - { ticker: 9509.T, name: 北海道電力, market: JP, segment: 大手電力 }
+    - { ticker: 9511.T, name: 沖縄電力, market: JP, segment: 大手電力 }
+    - { ticker: 9513.T, name: 電源開発(J-POWER), market: JP, segment: 卸電力・再エネ }
+    - { ticker: 9517.T, name: イーレックス, market: JP, segment: 卸電力・再エネ }
+    - { ticker: 9519.T, name: レノバ, market: JP, segment: 卸電力・再エネ }
+    - { ticker: CEG, name: Constellation Energy, market: US, segment: 米国電力(AI需要) }
+    - { ticker: VST, name: Vistra, market: US, segment: 米国電力(AI需要) }
+    - { ticker: NEE, name: NextEra Energy, market: US, segment: 米国電力(AI需要) }
+
+  # AI関連（segment = サプライチェーン上の区分。同じ区分が競合）
+  ai:
+    # GPU・AIチップ設計
+    - { ticker: NVDA, name: NVIDIA, market: US, segment: GPU・AIチップ }
+    - { ticker: AMD, name: AMD, market: US, segment: GPU・AIチップ }
+    - { ticker: AVGO, name: Broadcom, market: US, segment: GPU・AIチップ }
+    - { ticker: MRVL, name: Marvell, market: US, segment: GPU・AIチップ }
+    - { ticker: ARM, name: Arm, market: US, segment: GPU・AIチップ }
+    - { ticker: 6526.T, name: ソシオネクスト, market: JP, segment: GPU・AIチップ }
+    # ファウンドリ（受託製造）
+    - { ticker: TSM, name: TSMC, market: US, segment: ファウンドリ }
+    - { ticker: INTC, name: Intel, market: US, segment: ファウンドリ }
+    # メモリ（HBM）
+    - { ticker: MU, name: Micron, market: US, segment: メモリ }
+    - { ticker: 000660.KS, name: SK hynix, market: KR, segment: メモリ }
+    - { ticker: 005930.KS, name: Samsung Electronics, market: KR, segment: メモリ }
+    - { ticker: 285A.T, name: キオクシアHD, market: JP, segment: メモリ }
+    # 前工程装置（成膜・エッチング・露光・洗浄・マスク検査）
+    - { ticker: 8035.T, name: 東京エレクトロン, market: JP, segment: 前工程装置 }
+    - { ticker: 7735.T, name: SCREEN HD, market: JP, segment: 前工程装置 }
+    - { ticker: 6525.T, name: KOKUSAI ELECTRIC, market: JP, segment: 前工程装置 }
+    - { ticker: 6920.T, name: レーザーテック, market: JP, segment: 前工程装置 }
+    - { ticker: ASML, name: ASML, market: US, segment: 前工程装置 }
+    - { ticker: AMAT, name: Applied Materials, market: US, segment: 前工程装置 }
+    - { ticker: LRCX, name: Lam Research, market: US, segment: 前工程装置 }
+    - { ticker: KLAC, name: KLA, market: US, segment: 前工程装置 }
+    # 後工程装置（切断・研削・封止・テスト）
+    - { ticker: 6857.T, name: アドバンテスト, market: JP, segment: 後工程装置 }
+    - { ticker: 6146.T, name: ディスコ, market: JP, segment: 後工程装置 }
+    - { ticker: 7729.T, name: 東京精密, market: JP, segment: 後工程装置 }
+    - { ticker: 6315.T, name: TOWA, market: JP, segment: 後工程装置 }
+    - { ticker: TER, name: Teradyne, market: US, segment: 後工程装置 }
+    # 半導体材料・パッケージ基板
+    - { ticker: 4063.T, name: 信越化学工業, market: JP, segment: 材料・基板 }
+    - { ticker: 3436.T, name: SUMCO, market: JP, segment: 材料・基板 }
+    - { ticker: 4004.T, name: レゾナックHD, market: JP, segment: 材料・基板 }
+    - { ticker: 4186.T, name: 東京応化工業, market: JP, segment: 材料・基板 }
+    - { ticker: 4062.T, name: イビデン, market: JP, segment: 材料・基板 }
+    - { ticker: 2802.T, name: 味の素(ABF), market: JP, segment: 材料・基板 }
+    # 光通信・電線（データセンター配線）
+    - { ticker: 5803.T, name: フジクラ, market: JP, segment: 光通信・電線 }
+    - { ticker: 5801.T, name: 古河電気工業, market: JP, segment: 光通信・電線 }
+    - { ticker: 5802.T, name: 住友電気工業, market: JP, segment: 光通信・電線 }
+    - { ticker: GLW, name: Corning, market: US, segment: 光通信・電線 }
+    - { ticker: COHR, name: Coherent, market: US, segment: 光通信・電線 }
+    # AIサーバー・データセンター（電源・冷却含む）
+    - { ticker: SMCI, name: Super Micro Computer, market: US, segment: サーバー・DC }
+    - { ticker: DELL, name: Dell Technologies, market: US, segment: サーバー・DC }
+    - { ticker: VRT, name: Vertiv, market: US, segment: サーバー・DC }
+    - { ticker: 3778.T, name: さくらインターネット, market: JP, segment: サーバー・DC }
+    # AIプラットフォーム・クラウド
+    - { ticker: MSFT, name: Microsoft, market: US, segment: プラットフォーム }
+    - { ticker: GOOGL, name: Alphabet, market: US, segment: プラットフォーム }
+    - { ticker: AMZN, name: Amazon, market: US, segment: プラットフォーム }
+    - { ticker: META, name: Meta, market: US, segment: プラットフォーム }
+    - { ticker: 9984.T, name: ソフトバンクグループ, market: JP, segment: プラットフォーム }
