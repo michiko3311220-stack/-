@@ -13,10 +13,14 @@ PRICES_SHEET_COLUMNS = ["date", "ticker", "name", "group", "segment", "market",
                         "close", "adj_close", "volume"]
 
 
-def open_spreadsheet() -> gspread.Spreadsheet:
-    """環境変数 GCP_SA_KEY（JSON 文字列）と SPREADSHEET_ID で接続する。"""
+def open_spreadsheet(id_env: str = "SPREADSHEET_ID") -> gspread.Spreadsheet | None:
+    """環境変数 GCP_SA_KEY（JSON 文字列）と id_env のスプレッドシートIDで接続する。
+    id_env が未設定なら None（スマホ用ファイルなど任意のものに使う）。"""
+    key = os.environ.get(id_env)
+    if not key:
+        return None
     client = gspread.service_account_from_dict(json.loads(os.environ["GCP_SA_KEY"]))
-    return client.open_by_key(os.environ["SPREADSHEET_ID"])
+    return client.open_by_key(key)
 
 
 def get_or_create(book: gspread.Spreadsheet, title: str) -> gspread.Worksheet:

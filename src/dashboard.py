@@ -390,7 +390,9 @@ def write_mobile(book, summary, meta, labels, dates, spark_days,
 
 
 def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFrame,
-              summary: pd.DataFrame, settings: dict) -> None:
+              summary: pd.DataFrame, settings: dict, mobile_book: gspread.Spreadsheet | None = None) -> None:
+    """見る用のシートを書く。mobile_book があれば スマホ シートはそちら（軽いファイル）に書き、
+    本体からは消す。本体は履歴やグラフが多く、スマホアプリでは重くて開けないため。"""
     view, labels = settings["view"], settings.get("group_labels", {})
     names = meta["name"].tolist()  # グラフの凡例・プルダウンに銘柄名を出す
 
@@ -407,12 +409,27 @@ def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFra
     write_dashboard(book, summary, meta, labels, dates, view["sparkline_days"])
     write_charts(book, data, meta, labels, data_ws.id, view["chart_days"])
     write_single_chart(book, default_name=names[0])
-    write_mobile(book, summary, meta, labels, dates, view["sparkline_days"],
-                 chart_data=data, data_sheet_id=data_ws.id, chart_days=view["chart_days"])
+
+    if mobile_book is None:
+        write_mobile(book, summary, meta, labels, dates, view["sparkline_days"],
+                     chart_data=data, data_sheet_id=data_ws.id, chart_days=view["chart_days"])
+    else:
+        # SPARKLINE やグラフは同じファイル内のデータしか参照できないので、元データも複製する
+        mobile_data_ws = _write_wide(mobile_book, DATA_SHEET, ["日付"] + names, data, "RAW")
+        write_mobile(mobile_book, summary, meta, labels, dates, view["sparkline_days"],
+                     chart_data=data, data_sheet_id=mobile_data_ws.id, chart_days=view["chart_days"])
+        _delete_sheets(mobile_book, ["シート1", "Sheet1"])  # 新規作成時の空シート
+        _delete_sheets(book, [MOBILE_SHEET])
     reorder_tabs(book, TAB_ORDER)
 
 
-# 下のタブの並び（左から）。スマホでタブを探しやすいよう見る用のシートを左に寄せる
+def _delete_sheets(book: gspread.Spreadsheet, titles: list[str]) -> None:
+    for ws in book.worksheets():
+        if ws.title in titles:
+            book.del_worksheet(ws)
+
+
+# 下のタブの並び（左から）。見る用のシートを左に寄せる（無いシートは飛ばす）
 TAB_ORDER = [MOBILE_SHEET, CHARTS_SHEET, SINGLE_SHEET, DASHBOARD_SHEET]
 
 
