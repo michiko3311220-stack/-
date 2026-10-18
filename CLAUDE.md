@@ -73,6 +73,14 @@ AI関連は `segment`（区分）を持ち、同じ区分の銘柄同士が競�
 AIセグメントごとに、所属銘柄の当日騰落・25日騰落・安値乖離を並べ、区分の平均も出す。
 「GPUは全体で下げているのに1社だけ上げている」などを一目で見るためのシート。
 
+### 見る用のシート（`src/dashboard.py`、毎回シートごと作り直す）
+- `ダッシュボード`（先頭）: 区分ごとの見出し行 + 1行 = 1銘柄。終値・前日比・25日騰落、
+  3ヶ月の値動き（SPARKLINE、色はトレンド）、52週の位置（安値◀▶高値のバー）、底値シグナル（色付き）
+- `区分別グラフ`: `segment` ごとに競合の推移を重ねた折れ線グラフ。6ヶ月前の終値を100とした指数
+- `chart_data`: 上記の元データ（日付 × 銘柄の指数、休場日は前日値で埋める）
+- 色は日本の株価表示に合わせて 上昇=赤 / 下落=青
+- 期間・グループ表示名は `settings.yaml` の `view` / `group_labels`
+
 ## 取得ルール
 
 - 終値は `yfinance` の `Close`（未調整）を `close` に、`Adj Close` を `adj_close` に保存（`auto_adjust=False`）
@@ -114,6 +122,7 @@ src/
   fetch.py            # yfinance から終値取得
   sheets.py           # Google スプレッドシート読み書き（upsert）
   analyze.py          # summary / segments の計算
+  dashboard.py        # ダッシュボード / 区分別グラフ
   main.py             # エントリポイント: python -m src.main --market JP|US|ALL
 tests/
 .github/workflows/

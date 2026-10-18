@@ -9,3 +9,10 @@ trend:
 fetch:
   backfill_period: 1y   # 初回・新規銘柄のバックフィル期間
   recent_days: 10       # 通常実行時に取り直す営業日数
+view:
+  sparkline_days: 65    # ダッシュボードの小さな折れ線（約3ヶ月）
+  chart_days: 125       # 区分別グラフの期間（約6ヶ月）。開始日を100として表示
+group_labels:
+  topix_new_2026_10: TOPIX新規採用
+  power: 電力
+  ai: AI関連

@@ -6,7 +6,7 @@ import argparse
 import logging
 from datetime import date, timedelta
 
-from src import analyze, sheets
+from src import analyze, dashboard, sheets
 from src.config import load_settings, load_tickers
 from src.fetch import fetch_history
 
@@ -47,6 +47,9 @@ def run(market: str) -> None:
     sheets.write_frame(sheets.get_or_create(book, "summary"), summary)
     sheets.write_frame(sheets.get_or_create(book, "segments"), analyze.build_segments(summary))
     log.info("summary / segments を更新（失敗 %d 銘柄）", len(failed))
+
+    dashboard.write_all(book, history, meta, summary, settings)
+    log.info("ダッシュボード / 区分別グラフ を更新")
 
 
 def main() -> None:
