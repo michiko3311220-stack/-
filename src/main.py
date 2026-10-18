@@ -48,12 +48,7 @@ def run(market: str) -> None:
     sheets.write_frame(sheets.get_or_create(book, "segments"), analyze.build_segments(summary))
     log.info("summary / segments を更新（失敗 %d 銘柄）", len(failed))
 
-    try:
-        mobile_book = sheets.open_spreadsheet("MOBILE_SPREADSHEET_ID")
-    except Exception:  # 共有し忘れなどで開けなくても、本体の更新は止めない
-        log.exception("スマホ用スプレッドシートを開けないため、スマホ シートは本体に作ります")
-        mobile_book = None
-    dashboard.write_all(book, history, meta, summary, settings, mobile_book=mobile_book)
+    dashboard.write_all(book, history, meta, summary, settings)
     log.info("ダッシュボード / 区分別グラフ を更新")
 
 

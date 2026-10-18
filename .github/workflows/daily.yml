@@ -42,5 +42,4 @@ jobs:
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          MOBILE_SPREADSHEET_ID: ${{ secrets.MOBILE_SPREADSHEET_ID }}
         run: python -m src.main --market ${{ steps.market.outputs.value }}
