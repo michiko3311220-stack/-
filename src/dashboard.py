@@ -255,7 +255,7 @@ def _single_chart_values(select_cell: str, first_col: int) -> list[list]:
 
 
 def _single_chart_requests(sid: int, select: tuple[int, int], data_col: int, anchor: tuple[int, int],
-                           size: tuple[int, int], compact: bool = False) -> list[dict]:
+                           size: tuple[int, int]) -> list[dict]:
     """プルダウン（select の位置）と、data_col から4列のデータを使う折れ線グラフを作るリクエスト。"""
     gray = {"red": 0.6, "green": 0.6, "blue": 0.6}
     col = lambda c: _grid(sid, 0, CLOSE_ROWS, c, c + 1)  # noqa: E731
@@ -274,10 +274,10 @@ def _single_chart_requests(sid: int, select: tuple[int, int], data_col: int, anc
         {"addChart": {"chart": {
             "spec": {"basicChart": {
                 "chartType": "LINE",
-                "legendPosition": "NO_LEGEND" if compact else "TOP_LEGEND",
+                "legendPosition": "TOP_LEGEND",
                 "headerCount": 1,
                 "axis": [{"position": "BOTTOM_AXIS"},
-                         {"position": "LEFT_AXIS", **({} if compact else {"title": "終値"})}],
+                         {"position": "LEFT_AXIS", "title": "終値"}],
                 "domains": [{"domain": {"sourceRange": {"sources": [col(data_col)]}}}],
                 "series": series,
             }},
@@ -314,15 +314,11 @@ def write_single_chart(book, default_name: str) -> None:
 
 
 # スマホ用シートのレイアウト（行・列は0始まり）
-#   0行目: 銘柄プルダウン / 1行目〜: 個別チャート / その下: 一覧 / さらに下: 区分別グラフを縦に並べる
+#   0行目: 一覧の見出し（固定） / その下: 一覧 / さらに下: 区分別グラフを縦に並べる
 # スマホアプリではセル内リンクで別シートに飛べないため、見たいものを1シートに縦に並べている
 MOBILE_HEADER = ["銘柄", "前日比", "3ヶ月", "底値"]
 MOBILE_WIDTHS = [118, 58, 118, 62]       # 合計 356px（スマホ縦画面に収まる幅）
-MOBILE_SELECT_ROW = 0
-MOBILE_CHART_ROWS = 13                   # 個別チャートを置く行数（1行21px）
-MOBILE_LIST_ROW = 1 + MOBILE_CHART_ROWS  # 一覧の見出し行
 MOBILE_SEGMENT_ROWS = 14                 # 区分別グラフ1枚あたりの行数
-MOBILE_DATA_COL = 26                     # グラフ元データの列（AA〜AD）
 
 
 def build_mobile_rows(summary: pd.DataFrame, meta: pd.DataFrame, labels: dict,
@@ -335,38 +331,26 @@ def build_mobile_rows(summary: pd.DataFrame, meta: pd.DataFrame, labels: dict,
     return out, sections
 
 
-def write_mobile(book, summary, meta, labels, dates, spark_days, default_name: str,
+def write_mobile(book, summary, meta, labels, dates, spark_days,
                  chart_data: pd.DataFrame, data_sheet_id: int, chart_days: int) -> None:
-    """スマホで見る用のシート。毎日作り直すが、選んでいた銘柄は引き継ぐ。"""
-    names = set(meta["name"])
-    select_a1 = rowcol_to_a1(MOBILE_SELECT_ROW + 1, 2)
-    try:
-        selected = book.worksheet(MOBILE_SHEET).acell(select_a1).value
-    except gspread.WorksheetNotFound:
-        selected = None
-    if selected not in names:
-        selected = default_name
-
+    """スマホで見る用のシート（一覧 + 区分別グラフ）。毎日作り直す。"""
     rows, sections = build_mobile_rows(summary, meta, labels, dates, spark_days)
     blocks = _segment_blocks(meta)
-    seg_title_row = MOBILE_LIST_ROW + len(rows) + 1
-    n_rows = max(seg_title_row + 1 + MOBILE_SEGMENT_ROWS * len(blocks), CLOSE_ROWS) + 5
-    ws = _recreate(book, MOBILE_SHEET, 0, n_rows, MOBILE_DATA_COL + 4)
+    seg_title_row = len(rows) + 1
+    ws = _recreate(book, MOBILE_SHEET, 0, seg_title_row + 1 + MOBILE_SEGMENT_ROWS * len(blocks) + 5,
+                   len(MOBILE_HEADER))
     months = round(chart_days / 21)
-    ws.update([["銘柄▶", selected]], select_a1.replace("B", "A"), value_input_option="USER_ENTERED")
-    ws.update(rows, rowcol_to_a1(MOBILE_LIST_ROW + 1, 1), value_input_option="USER_ENTERED")
+    ws.update(rows, "A1", value_input_option="USER_ENTERED")
     ws.update([[f"■ 区分別グラフ（{months}ヶ月前=100、上ほど値上がり）"]], rowcol_to_a1(seg_title_row + 1, 1))
-    ws.update(_single_chart_values("$" + select_a1[0] + "$" + select_a1[1:], MOBILE_DATA_COL + 1), rowcol_to_a1(1, MOBILE_DATA_COL + 1), value_input_option="USER_ENTERED")
 
-    sid, top, ncol = ws.id, MOBILE_LIST_ROW, len(MOBILE_HEADER)
+    sid, top, ncol = ws.id, 0, len(MOBILE_HEADER)
     end = top + len(rows)
     small = {"textFormat": {"fontSize": 9}}
     requests = [
+        # 見出しはスクロールしても見えるよう固定
+        {"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {"frozenRowCount": 1}},
+                                   "fields": "gridProperties.frozenRowCount"}},
         *[_width(sid, i, i + 1, w) for i, w in enumerate(MOBILE_WIDTHS)],
-        {"mergeCells": {"range": _grid(sid, 0, 1, 1, ncol), "mergeType": "MERGE_ALL"}},
-        {"repeatCell": {"range": _grid(sid, 0, 1, 0, ncol), "cell": {"userEnteredFormat": {
-            "textFormat": {"bold": True}, "backgroundColor": _rgb("#fff2cc")}},
-            "fields": "userEnteredFormat(textFormat,backgroundColor)"}},
         {"repeatCell": {"range": _grid(sid, top, end, 0, ncol), "cell": {"userEnteredFormat": {
             **small, "wrapStrategy": "WRAP", "verticalAlignment": "MIDDLE"}},
             "fields": "userEnteredFormat(textFormat,wrapStrategy,verticalAlignment)"}},
@@ -382,9 +366,6 @@ def write_mobile(book, summary, meta, labels, dates, spark_days, default_name: s
                                        "properties": {"pixelSize": 34}, "fields": "pixelSize"}},
         _sign_rule(sid, 1, end, "NUMBER_GREATER", UP), _sign_rule(sid, 1, end, "NUMBER_LESS", DOWN),
         *[_text_rule(sid, 3, end, text, bg) for text, bg in SIGNAL_BG.items()],
-        *_single_chart_requests(sid, (MOBILE_SELECT_ROW, 1), MOBILE_DATA_COL, (MOBILE_SELECT_ROW + 1, 0),
-                                (sum(MOBILE_WIDTHS), 21 * MOBILE_CHART_ROWS),
-                                compact=True),
     ]
     requests += [
         {"mergeCells": {"range": _grid(sid, seg_title_row, seg_title_row + 1, 0, ncol), "mergeType": "MERGE_ALL"}},
@@ -426,7 +407,7 @@ def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFra
     write_dashboard(book, summary, meta, labels, dates, view["sparkline_days"])
     write_charts(book, data, meta, labels, data_ws.id, view["chart_days"])
     write_single_chart(book, default_name=names[0])
-    write_mobile(book, summary, meta, labels, dates, view["sparkline_days"], default_name=names[0],
+    write_mobile(book, summary, meta, labels, dates, view["sparkline_days"],
                  chart_data=data, data_sheet_id=data_ws.id, chart_days=view["chart_days"])
     reorder_tabs(book, TAB_ORDER)
 
