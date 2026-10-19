@@ -129,3 +129,25 @@ groups:
     - { ticker: AMZN, name: Amazon, market: US, segment: プラットフォーム }
     - { ticker: META, name: Meta, market: US, segment: プラットフォーム }
     - { ticker: 9984.T, name: ソフトバンクグループ, market: JP, segment: プラットフォーム }
+
+  # 防衛関連（segment が同じ銘柄同士を比較）
+  defense:
+    # 大手（防衛省の主契約企業。艦艇・航空機・ミサイル・エンジン）
+    - { ticker: 7011.T, name: 三菱重工業, market: JP, segment: 重工・航空機 }
+    - { ticker: 7012.T, name: 川崎重工業, market: JP, segment: 重工・航空機 }
+    - { ticker: 7013.T, name: IHI, market: JP, segment: 重工・航空機 }
+    - { ticker: 7270.T, name: SUBARU, market: JP, segment: 重工・航空機 }
+    - { ticker: 7224.T, name: 新明和工業, market: JP, segment: 重工・航空機 }
+    # 防衛エレクトロニクス・IT（レーダー・通信・監視・AI）
+    - { ticker: 6503.T, name: 三菱電機, market: JP, segment: 電子・IT }
+    - { ticker: 6701.T, name: NEC, market: JP, segment: 電子・IT }
+    - { ticker: 6702.T, name: 富士通, market: JP, segment: 電子・IT }
+    - { ticker: 7721.T, name: 東京計器, market: JP, segment: 電子・IT }
+    - { ticker: 6946.T, name: 日本アビオニクス, market: JP, segment: 電子・IT }
+    # 中堅・専業（火砲・火薬・小銃・機雷・防護）
+    - { ticker: 5631.T, name: 日本製鋼所, market: JP, segment: 火器・火薬・装備 }
+    - { ticker: 4403.T, name: 日油, market: JP, segment: 火器・火薬・装備 }
+    - { ticker: 6208.T, name: 石川製作所, market: JP, segment: 火器・火薬・装備 }
+    - { ticker: 6203.T, name: 豊和工業, market: JP, segment: 火器・火薬・装備 }
+    - { ticker: 4274.T, name: 細谷火工, market: JP, segment: 火器・火薬・装備 }
+    - { ticker: 7963.T, name: 興研, market: JP, segment: 火器・火薬・装備 }
