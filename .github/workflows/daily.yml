@@ -1,9 +1,12 @@
 name: daily-close
 
 on:
+  # GitHub の定期実行は遅延・取りこぼしがあるため、各市場とも予備の時刻を持たせる（再実行しても重複しない）
   schedule:
     - cron: "30 7 * * 1-5"   # 平日 16:30 JST: 日本株
+    - cron: "10 9 * * 1-5"   # 平日 18:10 JST: 日本株（予備）
     - cron: "30 22 * * 1-5"  # 火〜土 7:30 JST: 米国株など海外
+    - cron: "10 0 * * 2-6"   # 火〜土 9:10 JST: 米国株など海外（予備）
   workflow_dispatch:
     inputs:
       market:
@@ -33,7 +36,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "value=${{ inputs.market }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "30 7 * * 1-5" ]; then
+          elif [ "${{ github.event.schedule }}" = "30 7 * * 1-5" ] || [ "${{ github.event.schedule }}" = "10 9 * * 1-5" ]; then
             echo "value=JP" >> "$GITHUB_OUTPUT"
           else
             echo "value=US" >> "$GITHUB_OUTPUT"
