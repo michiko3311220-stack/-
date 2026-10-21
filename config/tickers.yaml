@@ -151,3 +151,23 @@ groups:
     - { ticker: 6203.T, name: 豊和工業, market: JP, segment: 火器・火薬・装備 }
     - { ticker: 4274.T, name: 細谷火工, market: JP, segment: 火器・火薬・装備 }
     - { ticker: 7963.T, name: 興研, market: JP, segment: 火器・火薬・装備 }
+
+  # セキュリティ関連（日米。segment が同じ銘柄同士を比較）
+  security:
+    - { ticker: 4704.T, name: トレンドマイクロ, market: JP, segment: 国内セキュリティ }
+    - { ticker: 3692.T, name: FFRIセキュリティ, market: JP, segment: 国内セキュリティ }
+    - { ticker: 2326.T, name: デジタルアーツ, market: JP, segment: 国内セキュリティ }
+    - { ticker: 4493.T, name: サイバーセキュリティクラウド, market: JP, segment: 国内セキュリティ }
+    - { ticker: 3857.T, name: ラック, market: JP, segment: 国内セキュリティ }
+    - { ticker: 4475.T, name: HENNGE, market: JP, segment: 国内セキュリティ }
+    - { ticker: 3040.T, name: ソリトンシステムズ, market: JP, segment: 国内セキュリティ }
+    # 米国：総合プラットフォーム（エンドポイント・ファイアウォール）
+    - { ticker: CRWD, name: CrowdStrike, market: US, segment: 米国プラットフォーム }
+    - { ticker: PANW, name: Palo Alto Networks, market: US, segment: 米国プラットフォーム }
+    - { ticker: FTNT, name: Fortinet, market: US, segment: 米国プラットフォーム }
+    - { ticker: CHKP, name: Check Point, market: US, segment: 米国プラットフォーム }
+    - { ticker: S, name: SentinelOne, market: US, segment: 米国プラットフォーム }
+    # 米国：クラウド・ネットワーク・ID管理
+    - { ticker: NET, name: Cloudflare, market: US, segment: 米国クラウド・ID }
+    - { ticker: ZS, name: Zscaler, market: US, segment: 米国クラウド・ID }
+    - { ticker: OKTA, name: Okta, market: US, segment: 米国クラウド・ID }

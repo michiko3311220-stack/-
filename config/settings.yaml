@@ -17,3 +17,14 @@ group_labels:
   power: 電力
   ai: AI関連
   defense: 防衛
+  security: セキュリティ
+report:
+  # 更新ごとに「買いの注目点」を探すレポートの閾値（仮の値）
+  rsi_days: 14
+  rsi_oversold: 30        # RSI がこれ以下 → 売られすぎ
+  ma_gap_pct: -15         # 25日移動平均からの乖離がこれ以下 → 下げすぎ
+  volume_ratio: 2.0       # 出来高が20日平均のこの倍以上 かつ
+  volume_up_pct: 2.0      #   前日比がこの%以上 → 買いが集まっている
+  segment_weak_pct: -5    # 区分平均の5日騰落がこれ以下の中で
+  segment_strong_pct: 2   #   5日騰落がこれ以上 → 区分内で逆行高
+  max_items: 15           # 注目銘柄として載せる最大数

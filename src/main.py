@@ -5,8 +5,11 @@
 import argparse
 import logging
 from datetime import date, timedelta
+from pathlib import Path
 
-from src import analyze, dashboard, sheets
+import pandas as pd
+
+from src import analyze, dashboard, report, sheets
 from src.config import load_settings, load_tickers
 from src.fetch import fetch_history
 
@@ -21,7 +24,7 @@ def target_tickers(meta, market: str) -> list[str]:
     return meta.loc[meta["market"] != "JP", "ticker"].tolist()  # US = 海外すべて
 
 
-def run(market: str) -> None:
+def run(market: str, report_out: str | None = None, force_report: bool = False) -> None:
     meta = load_tickers()
     settings = load_settings()
 
@@ -39,6 +42,10 @@ def run(market: str) -> None:
     in_target = history["ticker"].isin(targets)
     is_new = ~history["ticker"].isin(known)
     to_write = history[in_target & (is_new | (history["date"] >= since))]
+    # 対象市場に新しい取引日が入ったか（休場日や予備時刻の再実行ではレポートを出さない）
+    prev_latest = existing.loc[existing["ticker"].isin(targets), "date"].max()
+    new_latest = history.loc[in_target, "date"].max()
+    has_new_day = pd.notna(new_latest) and (pd.isna(prev_latest) or new_latest > prev_latest)
     merged = sheets.merge_prices(existing, to_write, meta)
     sheets.write_frame(prices_ws, merged)
     log.info("prices: %d 行を upsert（合計 %d 行）", len(to_write), len(merged))
@@ -48,6 +55,16 @@ def run(market: str) -> None:
     sheets.write_frame(sheets.get_or_create(book, "segments"), analyze.build_segments(summary))
     log.info("summary / segments を更新（失敗 %d 銘柄）", len(failed))
 
+    if has_new_day or force_report:
+        features = report.compute_features(history, summary, settings)
+        text = report.build_report(features[features["ティッカー"].isin(targets)], settings, market, new_latest)
+        report.write_report_sheet(book, text)
+        if report_out:
+            Path(report_out).write_text(text, encoding="utf-8")
+        log.info("レポートを作成（%s）", new_latest)
+    else:
+        log.info("対象市場に新しい取引日がないため、レポートは作りません")
+
     dashboard.write_all(book, history, meta, summary, settings)
     log.info("ダッシュボード / 区分別グラフ を更新")
 
@@ -55,9 +72,11 @@ def run(market: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--market", choices=["JP", "US", "ALL"], default="ALL")
+    parser.add_argument("--report-out", help="レポート本文を書き出すファイル（通知用）")
+    parser.add_argument("--force-report", action="store_true", help="新しい取引日がなくてもレポートを作る")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    run(args.market)
+    run(args.market, args.report_out, args.force_report)
 
 
 if __name__ == "__main__":

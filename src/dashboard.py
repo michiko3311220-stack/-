@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from gspread.utils import rowcol_to_a1
 
+from src.report import REPORT_SHEET
 from src.sheets import _to_values
 
 DATA_SHEET = "chart_data"
@@ -413,7 +414,7 @@ def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFra
 
 
 # 下のタブの並び（左から）。スマホでタブを探しやすいよう見る用のシートを左に寄せる
-TAB_ORDER = [MOBILE_SHEET, CHARTS_SHEET, SINGLE_SHEET, DASHBOARD_SHEET]
+TAB_ORDER = [MOBILE_SHEET, REPORT_SHEET, CHARTS_SHEET, SINGLE_SHEET, DASHBOARD_SHEET]
 
 
 def reorder_tabs(book: gspread.Spreadsheet, order: list[str]) -> None:
