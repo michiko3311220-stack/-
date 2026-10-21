@@ -50,7 +50,7 @@ def build_chart_data(history: pd.DataFrame, meta: pd.DataFrame, days: int) -> pd
     """直近 days 営業日の終値を、各銘柄の初日を100とした指数にする。"""
     wide = build_close_wide(history, meta).iloc[-days:]
     base = wide.bfill().iloc[0]
-    index = (wide / base * 100).round(2)
+    index = (wide / base * 100).round(2).copy()  # 列が多いと断片化警告が出るため複製してから列を足す
     index.insert(0, "日付", index.index)
     return index.reset_index(drop=True)
 

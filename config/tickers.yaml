@@ -158,7 +158,6 @@ groups:
     - { ticker: 3692.T, name: FFRIセキュリティ, market: JP, segment: 国内セキュリティ }
     - { ticker: 2326.T, name: デジタルアーツ, market: JP, segment: 国内セキュリティ }
     - { ticker: 4493.T, name: サイバーセキュリティクラウド, market: JP, segment: 国内セキュリティ }
-    - { ticker: 3857.T, name: ラック, market: JP, segment: 国内セキュリティ }
     - { ticker: 4475.T, name: HENNGE, market: JP, segment: 国内セキュリティ }
     - { ticker: 3040.T, name: ソリトンシステムズ, market: JP, segment: 国内セキュリティ }
     # 米国：総合プラットフォーム（エンドポイント・ファイアウォール）
