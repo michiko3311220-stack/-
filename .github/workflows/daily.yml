@@ -65,7 +65,7 @@ jobs:
         run: |
           printf '\n\ncc @%s\n' "$OWNER" >> report.md
           gh label create daily-report --color 1a73e8 --description "毎日の株価レポート" --force
-          gh issue create --title "$(head -1 report.md | sed 's/^# //')" --body-file report.md --label daily-report
-          # 最新以外のレポート Issue は閉じておく（履歴は closed として残る）
-          gh issue list --label daily-report --state open --json number --jq '.[1:][].number' \
+          # 前回までのレポート Issue を閉じてから新しいものを作る（作成直後は一覧に出ないことがあるため先に閉じる）
+          gh issue list --label daily-report --state open --json number --jq '.[].number' \
             | xargs -r -n1 gh issue close
+          gh issue create --title "$(head -1 report.md | sed 's/^# //')" --body-file report.md --label daily-report

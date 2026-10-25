@@ -4,14 +4,14 @@
 """
 import argparse
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 
 from src import analyze, dashboard, report, sheets
 from src.config import load_settings, load_tickers
-from src.fetch import fetch_history
+from src.fetch import drop_incomplete, fetch_history
 
 log = logging.getLogger(__name__)
 
@@ -19,9 +19,11 @@ log = logging.getLogger(__name__)
 def target_tickers(meta, market: str) -> list[str]:
     if market == "ALL":
         return meta["ticker"].tolist()
+    # 韓国は日本と同じ時間帯に引けるので JP の実行で扱う
+    asia = meta["market"].isin(["JP", "KR"])
     if market == "JP":
-        return meta.loc[meta["market"] == "JP", "ticker"].tolist()
-    return meta.loc[meta["market"] != "JP", "ticker"].tolist()  # US = 海外すべて
+        return meta.loc[asia, "ticker"].tolist()
+    return meta.loc[~asia, "ticker"].tolist()
 
 
 def run(market: str, report_out: str | None = None, force_report: bool = False) -> None:
@@ -30,6 +32,7 @@ def run(market: str, report_out: str | None = None, force_report: bool = False) 
 
     # 52週の計算に1年分が要るので、毎回全銘柄の1年分を取得する
     history, failed = fetch_history(meta["ticker"].tolist(), settings["fetch"]["backfill_period"])
+    history = drop_incomplete(history, dict(zip(meta["ticker"], meta["market"])), datetime.now(timezone.utc))
 
     book = sheets.open_spreadsheet()
     prices_ws = sheets.get_or_create(book, "prices")

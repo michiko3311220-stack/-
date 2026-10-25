@@ -82,3 +82,22 @@ def test_merge_prices_upserts():
 def test_to_values_handles_nan():
     values = _to_values(pd.DataFrame({"a": [1.5, np.nan], "b": ["x", None]}))
     assert values == [["a", "b"], [1.5, "x"], ["", ""]]
+
+
+def test_drop_incomplete_removes_today_before_close():
+    from datetime import datetime, timezone
+
+    from src.fetch import drop_incomplete
+    prices = pd.DataFrame({
+        "date": ["2026-10-22", "2026-10-23", "2026-10-22", "2026-10-23"],
+        "ticker": ["000660.KS", "000660.KS", "NVDA", "NVDA"],
+        "close": [1.0, 2.0, 3.0, 4.0], "adj_close": [1.0, 2.0, 3.0, 4.0], "volume": [1, 1, 1, 1],
+    })
+    market_of = {"000660.KS": "KR", "NVDA": "US"}
+    # 10/23 00:49 UTC = ソウル 9:49（取引中）・ニューヨーク 10/22 20:49（引け後）
+    out = drop_incomplete(prices, market_of, datetime(2026, 10, 23, 0, 49, tzinfo=timezone.utc))
+    assert out[out.ticker == "000660.KS"]["date"].tolist() == ["2026-10-22"]
+    assert len(out[out.ticker == "NVDA"]) == 2
+    # ソウル 16:00（引け後）なら残す
+    out = drop_incomplete(prices, market_of, datetime(2026, 10, 23, 7, 0, tzinfo=timezone.utc))
+    assert len(out[out.ticker == "000660.KS"]) == 2

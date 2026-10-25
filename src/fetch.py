@@ -1,6 +1,8 @@
 """yfinance から日足を取得し、縦持ちの DataFrame に整形する。"""
 import logging
 import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
@@ -8,6 +10,27 @@ import yfinance as yf
 log = logging.getLogger(__name__)
 
 PRICE_COLUMNS = ["date", "ticker", "close", "adj_close", "volume"]
+
+# 市場ごとの大引け（現地時刻）。取引時間中に取得すると当日の途中の値が返るため、その行は捨てる
+MARKET_CLOSE = {
+    "JP": ("Asia/Tokyo", 15, 30),
+    "KR": ("Asia/Seoul", 15, 30),
+    "US": ("America/New_York", 16, 0),
+}
+CLOSE_MARGIN = timedelta(minutes=20)  # 大引け直後は Yahoo の値が確定していないことがある
+
+
+def drop_incomplete(prices: pd.DataFrame, market_of: dict[str, str], now: datetime) -> pd.DataFrame:
+    """まだ大引けを迎えていない市場の「当日」の行を除く。now はタイムゾーン付き。"""
+    keep = pd.Series(True, index=prices.index)
+    for market, (tz, hour, minute) in MARKET_CLOSE.items():
+        local = now.astimezone(ZoneInfo(tz))
+        closed = local >= local.replace(hour=hour, minute=minute, second=0, microsecond=0) + CLOSE_MARGIN
+        if closed:
+            continue
+        tickers = [t for t, m in market_of.items() if m == market]
+        keep &= ~(prices["ticker"].isin(tickers) & (prices["date"] == local.strftime("%Y-%m-%d")))
+    return prices[keep]
 
 
 def normalize(raw: pd.DataFrame, tickers: list[str]) -> pd.DataFrame:
