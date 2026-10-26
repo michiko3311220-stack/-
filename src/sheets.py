@@ -58,3 +58,24 @@ def write_frame(ws: gspread.Worksheet, df: pd.DataFrame) -> None:
     ws.resize(rows=max(len(values), 2), cols=max(len(df.columns), 1))
     ws.update(values, "A1", value_input_option="RAW")
     ws.freeze(rows=1)
+
+
+STATUS_SHEET = "更新状況"
+STATUS_COLUMNS = ["市場", "終値の日付", "更新日時"]
+
+
+def update_status(book: gspread.Spreadsheet, latest: dict[str, str], updated_at: str) -> pd.DataFrame:
+    """市場ごとの「何日の終値か」「いつ更新したか」を記録して、全市場分を返す。
+
+    スマホ シートは毎回作り直すので、今回更新しなかった市場の更新日時はこのシートに残しておく。
+    latest は {市場: 終値の日付}。
+    """
+    ws = get_or_create(book, STATUS_SHEET)
+    records = ws.get_all_records()
+    status = pd.DataFrame(records, columns=STATUS_COLUMNS) if records else pd.DataFrame(columns=STATUS_COLUMNS)
+    status = status.astype(str).set_index("市場")
+    for market, day in latest.items():
+        status.loc[market] = [day, updated_at]
+    status = status.reset_index()
+    write_frame(ws, status)
+    return status

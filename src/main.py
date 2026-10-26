@@ -6,6 +6,7 @@ import argparse
 import logging
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -53,6 +54,12 @@ def run(market: str, report_out: str | None = None, force_report: bool = False) 
     sheets.write_frame(prices_ws, merged)
     log.info("prices: %d 行を upsert（合計 %d 行）", len(to_write), len(merged))
 
+    # 市場ごとの「何日の終値か」と更新日時（スマホ シートの一番上に出す）
+    updated_at = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M")
+    latest = {m: merged.loc[merged["ticker"].isin(target_tickers(meta, m)), "date"].max()
+              for m in (["JP", "US"] if market == "ALL" else [market])}
+    status = sheets.update_status(book, latest, updated_at)
+
     summary = analyze.build_summary(history, meta, settings, failed)
     sheets.write_frame(sheets.get_or_create(book, "summary"), summary)
     sheets.write_frame(sheets.get_or_create(book, "segments"), analyze.build_segments(summary))
@@ -68,7 +75,7 @@ def run(market: str, report_out: str | None = None, force_report: bool = False) 
     else:
         log.info("対象市場に新しい取引日がないため、レポートは作りません")
 
-    dashboard.write_all(book, history, meta, summary, settings)
+    dashboard.write_all(book, history, meta, summary, settings, status)
     log.info("ダッシュボード / 区分別グラフ を更新")
 
 

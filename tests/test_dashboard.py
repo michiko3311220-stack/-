@@ -66,3 +66,16 @@ def test_mobile_rows():
     assert rows[5] == ["東京電力HD", "", "", "取得失敗"]
     assert all(len(r) == 4 for r in rows)
     assert sum(dashboard.MOBILE_WIDTHS) <= 360
+
+
+def test_status_lines():
+    status = pd.DataFrame([
+        {"市場": "US", "終値の日付": "2026-10-23", "更新日時": "2026-10-24 07:45"},
+        {"市場": "JP", "終値の日付": "2026-10-26", "更新日時": "2026-10-26 16:42"},
+    ])
+    assert dashboard.status_lines(status) == [
+        "日本株：10/26(月)の終値｜更新 10/26(月) 16:42",
+        "米国株：10/23(金)の終値｜更新 10/24(土) 07:45",
+    ]
+    assert dashboard.status_lines(None) == []
+    assert dashboard.status_lines(status[status["市場"] == "JP"]) == ["日本株：10/26(月)の終値｜更新 10/26(月) 16:42"]

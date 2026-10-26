@@ -332,26 +332,58 @@ def build_mobile_rows(summary: pd.DataFrame, meta: pd.DataFrame, labels: dict,
     return out, sections
 
 
+STATUS_LABEL = {"JP": "日本株", "US": "米国株"}
+WEEKDAYS = "月火水木金土日"
+
+
+def _md_w(day: str) -> str:
+    d = pd.Timestamp(day)
+    return f"{d.month}/{d.day}({WEEKDAYS[d.weekday()]})"
+
+
+def status_lines(status: pd.DataFrame | None) -> list[str]:
+    """更新状況を「日本株：10/23(金)の終値｜更新 10/23 16:42」の形の行にする（日本→米国の順）。"""
+    if status is None or status.empty:
+        return []
+    lines = []
+    for market in STATUS_LABEL:
+        row = status[status["市場"] == market]
+        if row.empty or not row["終値の日付"].iloc[0] or row["終値の日付"].iloc[0] == "nan":
+            continue
+        day, updated = row["終値の日付"].iloc[0], row["更新日時"].iloc[0]
+        lines.append(f"{STATUS_LABEL[market]}：{_md_w(day)}の終値｜更新 {_md_w(updated[:10])} {updated[11:16]}")
+    return lines
+
+
 def write_mobile(book, summary, meta, labels, dates, spark_days,
-                 chart_data: pd.DataFrame, data_sheet_id: int, chart_days: int) -> None:
-    """スマホで見る用のシート（一覧 + 区分別グラフ）。毎日作り直す。"""
+                 chart_data: pd.DataFrame, data_sheet_id: int, chart_days: int,
+                 status: pd.DataFrame | None = None) -> None:
+    """スマホで見る用のシート（最終更新 + 一覧 + 区分別グラフ）。毎日作り直す。"""
     rows, sections = build_mobile_rows(summary, meta, labels, dates, spark_days)
+    head = status_lines(status)  # 一番上に出す最終更新（日米それぞれ）
     blocks = _segment_blocks(meta)
-    seg_title_row = len(rows) + 1
+    top = len(head)
+    seg_title_row = top + len(rows) + 1
     ws = _recreate(book, MOBILE_SHEET, 0, seg_title_row + 1 + MOBILE_SEGMENT_ROWS * len(blocks) + 5,
                    len(MOBILE_HEADER))
     months = round(chart_days / 21)
-    ws.update(rows, "A1", value_input_option="USER_ENTERED")
+    if head:
+        ws.update([[line] for line in head], "A1")
+    ws.update(rows, rowcol_to_a1(top + 1, 1), value_input_option="USER_ENTERED")
     ws.update([[f"■ 区分別グラフ（{months}ヶ月前=100、上ほど値上がり）"]], rowcol_to_a1(seg_title_row + 1, 1))
 
-    sid, top, ncol = ws.id, 0, len(MOBILE_HEADER)
+    sid, ncol = ws.id, len(MOBILE_HEADER)
     end = top + len(rows)
     small = {"textFormat": {"fontSize": 9}}
     requests = [
-        # 見出しはスクロールしても見えるよう固定
-        {"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {"frozenRowCount": 1}},
+        # 最終更新と見出しはスクロールしても見えるよう固定
+        {"updateSheetProperties": {"properties": {"sheetId": sid, "gridProperties": {"frozenRowCount": top + 1}},
                                    "fields": "gridProperties.frozenRowCount"}},
         *[_width(sid, i, i + 1, w) for i, w in enumerate(MOBILE_WIDTHS)],
+        *[{"mergeCells": {"range": _grid(sid, r, r + 1, 0, ncol), "mergeType": "MERGE_ALL"}} for r in range(top)],
+        *([{"repeatCell": {"range": _grid(sid, 0, top, 0, ncol), "cell": {"userEnteredFormat": {
+            "textFormat": {"fontSize": 9, "foregroundColor": _rgb("#5f6368")}, "backgroundColor": _rgb("#f8f9fa")}},
+            "fields": "userEnteredFormat(textFormat,backgroundColor)"}}] if top else []),
         {"repeatCell": {"range": _grid(sid, top, end, 0, ncol), "cell": {"userEnteredFormat": {
             **small, "wrapStrategy": "WRAP", "verticalAlignment": "MIDDLE"}},
             "fields": "userEnteredFormat(textFormat,wrapStrategy,verticalAlignment)"}},
@@ -391,7 +423,7 @@ def write_mobile(book, summary, meta, labels, dates, spark_days,
 
 
 def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFrame,
-              summary: pd.DataFrame, settings: dict) -> None:
+              summary: pd.DataFrame, settings: dict, status: pd.DataFrame | None = None) -> None:
     view, labels = settings["view"], settings.get("group_labels", {})
     names = meta["name"].tolist()  # グラフの凡例・プルダウンに銘柄名を出す
 
@@ -409,7 +441,7 @@ def write_all(book: gspread.Spreadsheet, history: pd.DataFrame, meta: pd.DataFra
     write_charts(book, data, meta, labels, data_ws.id, view["chart_days"])
     write_single_chart(book, default_name=names[0])
     write_mobile(book, summary, meta, labels, dates, view["sparkline_days"],
-                 chart_data=data, data_sheet_id=data_ws.id, chart_days=view["chart_days"])
+                 chart_data=data, data_sheet_id=data_ws.id, chart_days=view["chart_days"], status=status)
     reorder_tabs(book, TAB_ORDER)
 
 
