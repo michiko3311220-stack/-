@@ -170,3 +170,7 @@ groups:
     - { ticker: NET, name: Cloudflare, market: US, segment: 米国クラウド・ID }
     - { ticker: ZS, name: Zscaler, market: US, segment: 米国クラウド・ID }
     - { ticker: OKTA, name: Okta, market: US, segment: 米国クラウド・ID }
+
+  # ETF・指数（個別株の比較の物差しにもなる）
+  etf:
+    - { ticker: VTI, name: VTI（米国株式市場全体）, market: US }

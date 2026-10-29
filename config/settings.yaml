@@ -18,6 +18,7 @@ group_labels:
   ai: AI関連
   defense: 防衛
   security: セキュリティ
+  etf: ETF・指数
 report:
   # 更新ごとに「買いの注目点」を探すレポートの閾値（仮の値）
   rsi_days: 14
