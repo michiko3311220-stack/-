@@ -64,8 +64,12 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           printf '\n\ncc @%s\n' "$OWNER" >> report.md
-          gh label create daily-report --color 1a73e8 --description "毎日の株価レポート" --force
-          # 前回までのレポート Issue を閉じてから新しいものを作る（作成直後は一覧に出ないことがあるため先に閉じる）
-          gh issue list --label daily-report --state open --json number --jq '.[].number' \
-            | xargs -r -n1 gh issue close
-          gh issue create --title "$(head -1 report.md | sed 's/^# //')" --body-file report.md --label daily-report
+          # GitHub API は一時的に失敗することがあるので、何度か取り直す
+          retry() { for i in 1 2 3 4; do "$@" && return 0; sleep $((i * 10)); done; return 1; }
+          retry gh label create daily-report --color 1a73e8 --description "毎日の株価レポート" --force || true
+          # 前回までのレポート Issue を閉じてから新しいものを作る（作成直後は一覧に出ないことがあるため先に閉じる）。
+          # 閉じるのに失敗しても通知は止めない
+          for n in $(retry gh issue list --label daily-report --state open --json number --jq '.[].number' || true); do
+            retry gh issue close "$n" || echo "::warning::Issue #$n を閉じられませんでした"
+          done
+          retry gh issue create --title "$(head -1 report.md | sed 's/^# //')" --body-file report.md --label daily-report

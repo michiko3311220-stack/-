@@ -79,3 +79,45 @@ def test_build_report_without_signals():
     f = _features()
     text = report.build_report(f[f["ティッカー"] == "DDD"], SETTINGS, "JP", "2026-02-26")
     assert "買いの注目に当たる傾向は見つかりませんでした" in text
+
+
+class _FakeWs:
+    id = 1
+
+    def __init__(self, rows):
+        self.rows = rows
+
+    def get_values(self, _):
+        return [[r] if r else [] for r in self.rows]
+
+    def clear(self):
+        self.rows = []
+
+    def resize(self, **_):
+        pass
+
+    def update(self, rows, *_, **__):
+        self.rows = [r[0] for r in rows]
+
+
+class _FakeBook:
+    def __init__(self, ws):
+        self.ws = ws
+
+    def worksheet(self, _):
+        return self.ws
+
+    def batch_update(self, _):
+        pass
+
+
+def test_write_report_sheet_prepends_and_replaces_same_report():
+    book = _FakeBook(_FakeWs([]))
+    report.write_report_sheet(book, "# 株価レポート 10/29\n- a")
+    report.write_report_sheet(book, "# 株価レポート 10/30\n- b")
+    assert book.ws.rows[0] == "# 株価レポート 10/30" and "# 株価レポート 10/29" in book.ws.rows
+    # 同じレポートの作り直しは置き換え（重複させない）
+    report.write_report_sheet(book, "# 株価レポート 10/30\n- c")
+    assert book.ws.rows.count("# 株価レポート 10/30") == 1
+    assert "- c" in book.ws.rows and "- b" not in book.ws.rows
+    assert "# 株価レポート 10/29" in book.ws.rows

@@ -139,6 +139,9 @@ def write_report_sheet(book: gspread.Spreadsheet, text: str) -> None:
         ws = book.add_worksheet(title=REPORT_SHEET, rows=100, cols=1)
         old = []
     new = text.split("\n") + ["", "―" * 20, ""]
+    if old and old[0] == new[0] and new[-2] in old:
+        # 同じ日・同じ市場のレポートを作り直したとき（通知の再送など）は、前の分を置き換える
+        old = old[old.index(new[-2]) + 2:]
     rows = [[line] for line in (new + old)[:REPORT_KEEP_ROWS]]
     ws.clear()
     ws.resize(rows=len(rows), cols=1)
