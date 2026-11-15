@@ -21,6 +21,12 @@
 
 ## 実行のしかた
 
+### ライブ画面（APIキー不要）
+`live/ai_meeting_live.html` を claude.ai の Artifact として公開したページで「会議を始める」を押すと、
+見ている人の Claude の利用枠で、7役のAIがその場で順番に発言する（18回の問い合わせ）。
+「Googleドライブから読み込む」で資料フォルダの最新の資料を使える（Google Drive コネクタが必要）。
+資料・役割・見本を変えたら `python ai_meeting/live/build.py` でページを作り直して公開し直す。
+
 ### GitHub Actions（おすすめ）
 1. リポジトリの Secrets に `ANTHROPIC_API_KEY` を登録する
 2. Googleドライブの資料を使う場合は、既存のサービスアカウント（`GCP_SA_KEY`）のメールアドレスに

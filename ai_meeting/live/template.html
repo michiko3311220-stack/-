@@ -1,0 +1,386 @@
+<title>AI予算会議ライブ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap">
+<style>
+/* Layout: 会議室の議事録。上に会社の数字、左に参加者、中央に流れる発言、最後に配分案 */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --line: #dde2ea; --ink: #1d2433; --muted: #5d6879;
+  --accent: #e8574b; --navy: #1f2a44; --tint: #eef1f6; --good: #2f7d4a; --warn: #b4531c;
+  --display: "Zen Kaku Gothic New", "Noto Sans JP", "Hiragino Sans", sans-serif;
+  --body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141821; --surface: #1c2230; --line: #2e3647; --ink: #e8ecf3; --muted: #9aa5b8;
+  --accent: #ff7a6e; --navy: #c9d4ee; --tint: #232b3b; --good: #6fcf8f; --warn: #f0a46c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141821; --surface: #1c2230; --line: #2e3647; --ink: #e8ecf3; --muted: #9aa5b8;
+  --accent: #ff7a6e; --navy: #c9d4ee; --tint: #232b3b; --good: #6fcf8f; --warn: #f0a46c; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 18px }
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(24px, 4vw, 34px); line-height: 1.25; margin: 0; text-wrap: balance }
+.lede { color: var(--muted); margin: 6px 0 0; max-width: 62ch }
+.numbers { display: flex; flex-wrap: wrap; gap: 10px }
+.num { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 120px }
+.num b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; font-family: var(--display) }
+.num span { color: var(--muted); font-size: 12px }
+.num.hot b { color: var(--accent) }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center }
+button { font: inherit; font-weight: 700; border-radius: 999px; padding: 9px 18px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff }
+button:disabled { opacity: .45; cursor: default }
+button:focus-visible, select:focus-visible { outline: 3px solid var(--navy); outline-offset: 2px }
+select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink) }
+label.small { color: var(--muted); font-size: 13px; display: flex; gap: 6px; align-items: center }
+.source { color: var(--muted); font-size: 13px }
+.notice { background: var(--tint); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--muted) }
+.notice.err { color: var(--warn) }
+.room { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 18px; align-items: start }
+@media (max-width: 760px) { .room { grid-template-columns: minmax(0, 1fr) } }
+.people { position: sticky; top: env(safe-area-inset-top, 0px); display: grid; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px }
+@media (max-width: 760px) { .people { position: static; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) } }
+.person { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; min-width: 0 }
+.person .who { min-width: 0 }
+.person .who b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.person .who small { color: var(--muted); font-size: 11px }
+.person.speaking { background: var(--tint) }
+.person.speaking .av { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--c) }
+@media (prefers-reduced-motion: no-preference) { .person.speaking .av { animation: pulse 1.2s ease-in-out infinite } }
+@keyframes pulse { 50% { transform: scale(1.08) } }
+.av { --c: #888; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--c); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px }
+.feed { display: grid; gap: 12px; min-width: 0 }
+.phase { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; margin-top: 6px }
+.phase::before, .phase::after { content: ""; flex: 1; height: 1px; background: var(--line) }
+.msg { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px }
+.msg .av { width: 40px; height: 40px }
+.bubble { background: var(--surface); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px; padding: 10px 14px; min-width: 0 }
+.msg.fac .bubble { background: var(--tint) }
+.bubble .name { font-size: 12px; font-weight: 700; color: var(--muted); display: flex; gap: 8px }
+.bubble .text { white-space: pre-wrap; overflow-wrap: anywhere }
+.bubble .text.thinking { color: var(--muted); font-style: italic }
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px; color: var(--muted) }
+.result { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px }
+.result h2 { font-family: var(--display); font-size: 20px; margin: 0 }
+.tablebox { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums }
+th, td { border-bottom: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top }
+td.n, th.n { text-align: right; white-space: nowrap }
+tr.total td { font-weight: 700 }
+.pl { display: flex; flex-wrap: wrap; gap: 10px }
+.pill { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; background: var(--tint) }
+.pill.ok { color: var(--good) } .pill.ng { color: var(--warn) }
+ul.tight { margin: 0; padding-left: 1.2em }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>7人のAIが、来期の予算を話し合う</h1>
+    <p class="lede">架空の会社「みらいエール」（団体とサポーターをつなぐCtoC応援アプリ・月の売上3億円）。各部署のAIは全社方針と自分の部署の資料だけを読み、ほかの部署の事情は会議の発言から知ります。</p>
+  </header>
+
+  <div class="numbers" aria-label="来期の前提">
+    <div class="num"><b>43.2億円</b><span>来期の売上目標（1.2倍）</span></div>
+    <div class="num"><b>10.0億円</b><span>営業利益の目標</span></div>
+    <div class="num"><b>5.0億円</b><span>施策費の枠</span></div>
+    <div class="num hot"><b>7.5億円</b><span>各部の要望の合計</span></div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="start">会議を始める（AIが実際に話す）</button>
+    <button id="replay">見本を再生</button>
+    <button id="stop" disabled>止める</button>
+    <label class="small" for="tier">話す速さ
+      <select id="tier">
+        <option value="quick">速さ優先</option>
+        <option value="default">じっくり考える</option>
+      </select>
+    </label>
+    <button id="copy" disabled>議事録をコピー</button>
+  </div>
+  <div class="controls">
+    <span class="source" id="source">資料：ページに入っている7つの資料（Googleドライブと同じ内容）</span>
+    <button id="drive">Googleドライブから読み込む</button>
+  </div>
+  <div class="notice" id="notice">「会議を始める」を押すと、あなたの Claude の利用枠で 18回 Claude に問い合わせます（最初に許可を求められます）。速さ優先なら数分、じっくり考えるなら10分ほどかかります。</div>
+
+  <div class="room">
+    <aside class="people" id="people" aria-label="参加者"></aside>
+    <section class="feed" id="feed" aria-live="polite">
+      <div class="empty" id="empty">まだ会議は始まっていません。「会議を始める」でAI同士の実際の会議を、「見本を再生」で以前の見本の議事録を表示します。</div>
+    </section>
+  </div>
+  <section class="result" id="result" hidden></section>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(() => {
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const PLAN = DATA.plan;
+const DRIVE_FOLDER = DATA.driveFolder;
+let DOCS = DATA.docs;               // {name: markdown}
+const ROLES = DATA.roles;           // [{key,name,ch,color,doc,persona,fac?}]
+const TOPIC = DATA.topic;
+const $ = (id) => document.getElementById(id);
+const use = (name) => (window.claude?.use ? window.claude.use(name) : Promise.resolve(null));
+const els = { feed: $("feed"), people: $("people"), notice: $("notice"), result: $("result") };
+let log = [];          // {phase, speaker, text}
+let ctl = null, running = false;
+
+// ---------- 参加者
+for (const r of ROLES) {
+  const d = document.createElement("div");
+  d.className = "person"; d.id = "p-" + r.key;
+  d.innerHTML = `<div class="av" style="--c:#${r.color}">${r.ch}</div><div class="who"><b></b><small></small></div>`;
+  d.querySelector("b").textContent = r.name;
+  d.querySelector("small").textContent = r.fac ? "進行役" : "待機中";
+  els.people.append(d);
+}
+const role = (key) => ROLES.find((r) => r.key === key);
+function setSpeaking(key, label) {
+  for (const r of ROLES) {
+    const p = $("p-" + r.key);
+    p.classList.toggle("speaking", r.key === key);
+    p.querySelector("small").textContent = r.key === key ? label : (r.fac ? "進行役" : "待機中");
+  }
+}
+
+// ---------- 発言の表示
+let lastPhase = null;
+function addPhase(name) {
+  if (name === lastPhase) return;
+  lastPhase = name;
+  const d = document.createElement("div"); d.className = "phase"; d.textContent = name;
+  els.feed.append(d);
+}
+function addBubble(r, phase) {
+  $("empty").hidden = true;
+  addPhase(phase);
+  const m = document.createElement("div");
+  m.className = "msg" + (r.fac ? " fac" : "");
+  m.innerHTML = `<div class="av" style="--c:#${r.color}">${r.ch}</div><div class="bubble"><div class="name"><span></span></div><div class="text thinking">考えています…</div></div>`;
+  m.querySelector(".name span").textContent = r.name;
+  els.feed.append(m);
+  m.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  return m.querySelector(".text");
+}
+function resetFeed() {
+  els.feed.querySelectorAll(".phase,.msg").forEach((n) => n.remove());
+  $("empty").hidden = false; lastPhase = null; log = [];
+  els.result.hidden = true; els.result.innerHTML = "";
+  $("copy").disabled = true;
+}
+function setBusy(b) {
+  running = b;
+  $("start").disabled = b; $("replay").disabled = b; $("drive").disabled = b; $("tier").disabled = b;
+  $("stop").disabled = !b;
+  if (!b) setSpeaking(null);
+}
+function say(text, err) { els.notice.textContent = text; els.notice.classList.toggle("err", !!err); }
+
+// ---------- プロンプト（ai_meeting/meeting.py と同じ内容）
+const transcript = () => log.length ? log.map((e) => `【${e.speaker}】${e.text}`).join("\n\n") : "（まだ発言はありません）";
+function materials(r) {
+  if (r.fac) return "（各部から提出された資料がすべて手元にあります）\n\n" + Object.entries(DOCS).map(([n, t]) => `## ${n}\n${t}`).join("\n\n");
+  return `## 全社方針\n${DOCS[DATA.companyDoc]}\n\n## 自部署の資料\n${DOCS[r.doc]}`;
+}
+function rolePrompt(r) {
+  const head = r.fac ? "あなたはこの会議の進行役です。" : "あなたは自分の部署の代表として会議に出ています。";
+  return `あなたは架空の会社「株式会社みらいエール」の${r.name}の責任者です。${head}
+人物像：${r.persona}
+
+会議の議題：${TOPIC}
+
+# 話し方のルール
+- 会議での発言として、です・ます調の話し言葉で話す。見出し・箇条書き・表・太字は使わない
+- 1回の発言は200〜350字。結論を先に言う
+- 数字は、下の資料にあるものか、会議でほかの人が言ったものだけを使う。資料にない数字を作らない
+- ほかの人の発言に触れるときは「〇〇部さんの〜」と名前を出す
+- 自分の部署の立場で話すが、全社の目標は共有している
+- 発言の先頭に自分の部署名や「：」は付けない。発言だけを書く
+
+# あなたが持っている資料
+${materials(r)}`;
+}
+const u = PLAN.unit;
+function steps() {
+  const fac = ROLES.find((r) => r.fac), depts = ROLES.filter((r) => !r.fac), fin = depts.find((r) => r.key === "finance");
+  const s = [];
+  s.push([fac, "開会", `会議を始めてください。参加者は${depts.map((d) => d.name).join("、")}です。議題、来期の目標（売上${PLAN.revenue}${u}・営業利益${PLAN.profit_target}${u}以上）、施策費の枠（${PLAN.base_cap}${u}。原価を下げればその分広がる）、進め方（①各部のKPIと要望の説明 ②論点整理と調整 ③予算案のとりまとめ）を短く伝え、最初の部署に説明をお願いしてください。`]);
+  for (const d of depts) s.push([d, "要望説明", d.key === "finance"
+    ? "自部署のKPIと要望を説明したうえで、ここまでの各部の要望を合計すると枠をどれだけ超えるかを指摘し、原価を下げる余地も含めて、調整の考え方を述べてください。"
+    : "自部署の来期のKPIと、それを達成するための施策費の要望を説明してください。要望額、いちばん大事な施策とその効果、他部署にお願いしたいことがあればそれも。"]);
+  s.push([fac, "論点整理", "各部の説明を受けて、論点を2〜3個に絞って示してください。部署どうしの依存関係（ある部の施策が別の部の成果を左右するもの）に注目し、どの部にどんな譲歩や工夫を考えてほしいかを、部署名を挙げて具体的に投げかけてください。"]);
+  for (const d of depts) s.push([d, "調整", "進行役の投げかけとほかの部の発言を受けて、自部署として出せる調整案を金額つきで示してください。削る代わりに条件や他部署への頼みがあれば言ってください。ほかの部の案に賛成・懸念があれば一言触れてください。"]);
+  s.push([fac, "調整案", "ここまでの調整案をもとに、原価を下げる工夫で施策費の枠がいくらになるかを確認し、部署ごとの配分額と合計を口頭で示してください。下期の条件付き予備費を置くかどうかも決めてください。"]);
+  s.push([fin, "確認", `進行役の調整案を、営業利益${PLAN.profit_target}${u}以上を守れるか、原価の見込みに無理がないか、売上1.2倍の達成に響かないかの観点で確認し、了承するか、条件をつけて了承するかを述べてください。`]);
+  s.push([fac, "閉会", "配分案が固まりました。決まったことと、次回までの宿題を短くまとめて会議を締めてください。"]);
+  return s;
+}
+
+// ---------- 会議を動かす
+let sample = null;
+use("sample").then((s) => { sample = s; if (!s) { $("start").disabled = true; say("この画面では AI を呼び出せません。「見本を再生」で見本の議事録を表示できます。"); } });
+
+async function speak(r, phase, instr, opts) {
+  setSpeaking(r.key, "考え中…");
+  const el = addBubble(r, phase);
+  const input = rolePrompt(r) + `\n\n# ここまでの議事録\n${transcript()}\n\n# 今のあなたの番\n${instr}`;
+  const { text } = await sample(input, { ...opts, cache: false, signal: ctl.signal,
+    onText: ({ text }) => { el.classList.remove("thinking"); el.textContent = text; setSpeaking(r.key, "発言中"); } });
+  el.classList.remove("thinking"); el.textContent = text.trim();
+  log.push({ phase, speaker: r.name, text: text.trim() });
+}
+
+async function finalBudget(opts) {
+  const fac = ROLES.find((r) => r.fac);
+  setSpeaking(fac.key, "配分案を作成中…");
+  const depts = ROLES.filter((r) => !r.fac).map((r) => r.name);
+  const prompt = rolePrompt(fac) + `
+
+# 議事録
+${transcript()}
+
+# 依頼
+会議で合意した内容を配分案にまとめてください。JSONだけで答えること。形式：
+{"summary": "考え方を2〜3文で", "items": [{"department": "部署名", "requested": 要望額, "allocated": 配分額, "changes": "要望から何をどう変えたか1文"}], "reserve": 予備費（無ければ0）, "reserve_condition": "予備費を出す条件（無ければ空文字）", "cost_of_sales": 会議で合意した工夫を反映した来期の原価, "cost_notes": "原価を基準${PLAN.base_cost}${u}からどう変えたか1文", "total": 配分額の合計＋予備費, "decisions": ["決まったこと"], "action_items": [{"owner": "部署名", "task": "宿題"}]}
+部署は ${depts.join("、")} の順。要望額は各部の資料の値、配分額は会議で合意した値。金額の単位は${u}の数値。`;
+  return sample.json(prompt, { ...opts, cache: false, signal: ctl.signal });
+}
+
+$("start").onclick = async () => {
+  if (!sample || running) return;
+  resetFeed(); setBusy(true); ctl = new AbortController();
+  const opts = { modelTier: $("tier").value };
+  say("会議中です。発言は1人ずつ、その場でAIが考えて書いています。");
+  const all = steps();
+  try {
+    for (let i = 0; i < all.length - 1; i++) await speak(...all[i], opts);
+    const b = await finalBudget(opts);
+    renderBudget(b, false);
+    await speak(...all[all.length - 1], opts);
+    say("会議が終わりました。下に配分案があります。");
+  } catch (e) {
+    const msgs = {
+      cancelled: "会議を止めました。", not_granted: "AI の呼び出しが許可されなかったため、会議を開けません。「見本を再生」で見本の議事録を表示できます。",
+      sampling_disabled: "このアカウントでは、ページから AI を呼び出せません。「見本を再生」をお使いください。",
+      rate_limited: "AI の利用が混み合っているか、利用枠の上限に達しました。しばらく待ってから、もう一度「会議を始める」を押してください。",
+      invalid_json: "配分案を表にできませんでした。もう一度「会議を始める」を押してください。",
+      refused: "AI がこの発言を断りました。もう一度試すか、「見本を再生」をお使いください。",
+    };
+    const t = els.feed.querySelector(".msg:last-of-type .text.thinking");
+    if (t) t.textContent = e?.text || "（中断）";
+    say(msgs[e?.code] || "途中で通信が切れました。もう一度「会議を始める」を押してください。", e?.code !== "cancelled");
+  } finally {
+    setBusy(false); $("copy").disabled = log.length === 0;
+  }
+};
+$("stop").onclick = () => { ctl?.abort(); replayStop = true; };
+
+// ---------- 見本の再生（その場ではAIを呼ばない）
+let replayStop = false;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+$("replay").onclick = async () => {
+  if (running) return;
+  resetFeed(); setBusy(true); replayStop = false;
+  say("見本の議事録を再生しています（以前に用意した見本で、いまAIが話しているわけではありません）。");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const e of DATA.sampleLog) {
+    if (replayStop) break;
+    const r = ROLES.find((x) => x.name === e.speaker);
+    setSpeaking(r.key, "発言中");
+    const el = addBubble(r, e.phase);
+    await wait(reduce ? 0 : 500); el.classList.remove("thinking");
+    if (reduce) el.textContent = e.text;
+    else for (let i = 0; i <= e.text.length && !replayStop; i += 4) { el.textContent = e.text.slice(0, i); await wait(16); }
+    el.textContent = e.text;
+    log.push({ phase: e.phase, speaker: e.speaker, text: e.text });
+    if (e.phase === "確認" && !replayStop) renderBudget(DATA.sampleBudget, true);
+  }
+  setBusy(false); $("copy").disabled = log.length === 0;
+  say(replayStop ? "再生を止めました。" : "見本の再生が終わりました。");
+};
+
+// ---------- 配分案（合計と営業利益はページで計算し直す）
+const f2 = (v) => (Math.round(Number(v) * 100) / 100).toFixed(2);
+function renderBudget(b, isSample) {
+  const items = Array.isArray(b?.items) ? b.items : [];
+  const reserve = Number(b?.reserve) || 0;
+  const total = items.reduce((s, i) => s + (Number(i.allocated) || 0), 0) + reserve;
+  const req = items.reduce((s, i) => s + (Number(i.requested) || 0), 0);
+  const cost = Number(b?.cost_of_sales) || PLAN.base_cost;
+  const profit = PLAN.revenue - cost - PLAN.fixed_sga - total;
+  const ok = profit >= PLAN.profit_target - 0.005;
+  const R = els.result; R.innerHTML = ""; R.hidden = false;
+  const h = document.createElement("h2"); h.textContent = isSample ? "配分案（見本）" : "配分案（いまの会議の結果）"; R.append(h);
+  const p = document.createElement("p"); p.textContent = b?.summary || ""; p.style.margin = "0"; R.append(p);
+  const box = document.createElement("div"); box.className = "tablebox";
+  const t = document.createElement("table");
+  t.innerHTML = `<thead><tr><th>部署</th><th class="n">要望</th><th class="n">配分</th><th>調整の内容</th></tr></thead><tbody></tbody>`;
+  const tb = t.querySelector("tbody");
+  const row = (cells, cls) => { const tr = document.createElement("tr"); if (cls) tr.className = cls;
+    cells.forEach(([v, n]) => { const td = document.createElement("td"); if (n) td.className = "n"; td.textContent = v; tr.append(td); }); tb.append(tr); };
+  for (const i of items) row([[i.department || ""], [f2(i.requested), 1], [f2(i.allocated), 1], [i.changes || ""]]);
+  if (reserve) row([["予備費（条件付き）"], ["–", 1], [f2(reserve), 1], [b.reserve_condition || ""]]);
+  row([["合計"], [f2(req), 1], [f2(total), 1], [`単位：${u}`]], "total");
+  box.append(t); R.append(box);
+  const pl = document.createElement("div"); pl.className = "pl";
+  pl.innerHTML = `<span class="pill"></span><span class="pill"></span><span class="pill ${ok ? "ok" : "ng"}"></span>`;
+  const [a, c, d] = pl.children;
+  a.textContent = `原価 ${f2(cost)}（基準 ${f2(PLAN.base_cost)}）`;
+  c.textContent = `施策費 ${f2(total)}`;
+  d.textContent = `営業利益 ${f2(profit)}${u}（目標 ${f2(PLAN.profit_target)}）${ok ? "・達成" : "・未達"}`;
+  R.append(pl);
+  const note = document.createElement("p"); note.className = "source"; note.style.margin = "0";
+  note.textContent = "合計と営業利益は、AIの答えをそのまま使わず、このページで計算し直しています。" + (b?.cost_notes ? " 原価：" + b.cost_notes : "");
+  R.append(note);
+  if (Array.isArray(b?.decisions) && b.decisions.length) {
+    const ul = document.createElement("ul"); ul.className = "tight";
+    for (const x of b.decisions) { const li = document.createElement("li"); li.textContent = String(x); ul.append(li); }
+    const hh = document.createElement("b"); hh.textContent = "決まったこと"; R.append(hh, ul);
+  }
+}
+
+// ---------- 議事録のコピー
+$("copy").onclick = async () => {
+  const text = `# AI会議 議事録\n議題：${TOPIC}\n\n` + log.map((e) => `【${e.phase}｜${e.speaker}】\n${e.text}`).join("\n\n");
+  try { await navigator.clipboard.writeText(text); say("議事録をコピーしました。"); }
+  catch { say("コピーできませんでした。画面の発言を選択してコピーしてください。", true); }
+};
+
+// ---------- Googleドライブから資料を読む（使えない場合はページの資料のまま）
+let mcp = null;
+use("mcp").then((m) => { mcp = m; if (!m) $("drive").hidden = true; });
+$("drive").onclick = async () => {
+  if (!mcp || running) return;
+  $("drive").disabled = true;
+  say("Googleドライブの資料フォルダを読んでいます…");
+  try {
+    const res = await mcp.callTool("Google Drive", "search_files", { query: `parentId = '${DRIVE_FOLDER}'`, excludeContentSnippets: true, pageSize: 50 }, { cache: false });
+    const files = (res.payload?.files || []).filter((f) => f.mimeType === "application/vnd.google-apps.document");
+    const next = {};
+    for (const f of files) {
+      const r = await mcp.callTool("Google Drive", "read_file_content", { fileId: f.id, includeComments: true }, { cache: false });
+      const txt = r.payload?.fileContent ?? (typeof r.payload === "string" ? r.payload : "");
+      if (txt) next[f.title] = txt;
+    }
+    const need = [DATA.companyDoc, ...ROLES.filter((r) => !r.fac).map((r) => r.doc)];
+    const missing = need.filter((n) => !next[n]);
+    if (missing.length) { say(`ドライブに見つからない資料があります：${missing.join("、")}。ページに入っている資料のまま進めます。`, true); return; }
+    DOCS = next;
+    $("source").textContent = `資料：Googleドライブから読み込んだ ${Object.keys(next).length} 件（${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}）`;
+    say("ドライブの資料を読み込みました。この資料で「会議を始める」ができます。");
+  } catch (e) {
+    const m = {
+      server_not_connected: "Google Drive コネクタがつながっていません。claude.ai の設定 → コネクタで Google Drive を追加してください。ページの資料のまま進めます。",
+      needs_reauth: "Google Drive の接続が切れています。claude.ai の設定 → コネクタでつなぎ直してください。ページの資料のまま進めます。",
+      not_in_manifest: "Google Drive の利用が許可されませんでした。ページの資料のまま進めます。",
+      blocked_by_policy: "組織の設定で Google Drive を使えません。ページの資料のまま進めます。",
+    };
+    say(m[e?.code] || "ドライブを読めませんでした。ページの資料のまま進めます。", true);
+  } finally { $("drive").disabled = false; }
+};
+})();
+</script>
