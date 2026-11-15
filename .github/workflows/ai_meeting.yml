@@ -1,0 +1,48 @@
+name: ai-meeting
+
+# 部署ごとの役割を持ったAIが資料をもとに会議をして、予算案をまとめる（手動実行のみ）
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "議題"
+        default: "2027年度の部門予算案を決める"
+      drive_folder:
+        description: "資料を置いた Google ドライブのフォルダID（空なら ai_meeting/sample_docs を使う）"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  meeting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r ai_meeting/requirements.txt
+      - name: 会議を開く
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          TOPIC: ${{ inputs.topic }}
+          DRIVE_FOLDER: ${{ inputs.drive_folder }}
+        run: |
+          args=(--topic "$TOPIC")
+          if [ -n "$DRIVE_FOLDER" ]; then args+=(--drive-folder "$DRIVE_FOLDER"); fi
+          python ai_meeting/meeting.py "${args[@]}"
+      - name: 結果を実行ページに表示
+        if: always()
+        run: |
+          if [ -f ai_meeting/output/budget.md ]; then
+            cat ai_meeting/output/budget.md ai_meeting/output/transcript.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-meeting-output
+          path: ai_meeting/output/
+          if-no-files-found: ignore

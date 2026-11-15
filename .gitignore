@@ -4,3 +4,5 @@
 __pycache__/
 .pytest_cache/
 .venv/
+!ai_meeting/sample_output/*.json
+ai_meeting/output/
