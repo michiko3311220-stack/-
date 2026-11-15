@@ -8,13 +8,13 @@
     python ai_meeting/meeting.py --drive-folder <フォルダID>
 
     # 議題を変える
-    python ai_meeting/meeting.py --topic "来年度の採用計画を決める"
+    python ai_meeting/meeting.py --topic "来期の採用計画を決める"
 
 仕組み:
     - 各部署のAIは「全社方針」と「自分の部署の資料」だけを読む（他部署の資料は見えない）
     - 進行役（経営企画部）は全部署の資料を受け取っている
     - 発言は全員が共有する議事録に積み上がり、次の発言者はそれを読んで話す
-    - 最後に進行役が予算案を決まった形式（JSON）で出す
+    - 最後に進行役が予算案を決まった形式（JSON）で出し、合計と営業利益をプログラムで検算する
 """
 
 from __future__ import annotations
@@ -139,17 +139,19 @@ BUDGET_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "department": {"type": "string"},
-                    "requested": {"type": "number", "description": "要望額（億円）"},
-                    "allocated": {"type": "number", "description": "配分額（億円）"},
+                    "requested": {"type": "number", "description": "施策費の要望額"},
+                    "allocated": {"type": "number", "description": "施策費の配分額"},
                     "changes": {"type": "string", "description": "要望から何をどう変えたか。1文"},
                 },
                 "required": ["department", "requested", "allocated", "changes"],
                 "additionalProperties": False,
             },
         },
-        "reserve": {"type": "number", "description": "下期の条件付き予備費（億円）。無ければ0"},
+        "reserve": {"type": "number", "description": "下期の条件付き予備費。無ければ0"},
         "reserve_condition": {"type": "string", "description": "予備費を出す条件。無ければ空文字"},
-        "total": {"type": "number", "description": "配分額の合計＋予備費（億円）"},
+        "total": {"type": "number", "description": "配分額の合計＋予備費"},
+        "cost_of_sales": {"type": "number", "description": "会議で合意した工夫を反映した来期の原価"},
+        "cost_notes": {"type": "string", "description": "原価を基準からどう変えたか。1文"},
         "decisions": {"type": "array", "items": {"type": "string"}, "description": "決まったこと"},
         "action_items": {
             "type": "array",
@@ -165,18 +167,18 @@ BUDGET_SCHEMA = {
             },
         },
     },
-    "required": ["summary", "items", "reserve", "reserve_condition", "total",
-                 "decisions", "action_items"],
+    "required": ["summary", "items", "reserve", "reserve_condition", "total", "cost_of_sales",
+                 "cost_notes", "decisions", "action_items"],
     "additionalProperties": False,
 }
 
 
 class Meeting:
-    def __init__(self, client: anthropic.Anthropic, topic: str, cap: float,
+    def __init__(self, client: anthropic.Anthropic, topic: str, plan: dict,
                  facilitator: Member, depts: list[Member]):
         self.client = client
         self.topic = topic
-        self.cap = cap
+        self.plan = plan
         self.facilitator = facilitator
         self.depts = depts
         self.log: list[dict] = []  # {"phase", "speaker", "icon", "text"}
@@ -217,18 +219,20 @@ class Meeting:
     # ---- 会議全体
     def run(self) -> dict:
         names = "、".join(d.name for d in self.depts)
+        p, u = self.plan, self.plan["unit"]
         self.speak(self.facilitator, "開会",
-                   f"会議を始めてください。参加者は{names}です。議題、予算の上限（{self.cap}億円）、"
-                   "進め方（①各部の要望説明 ②論点整理と調整 ③予算案のとりまとめ）を短く伝え、"
+                   f"会議を始めてください。参加者は{names}です。議題、来期の目標（売上{p['revenue']}{u}・"
+                   f"営業利益{p['profit_target']}{u}以上）、施策費の枠（{p['base_cap']}{u}。原価を下げればその分広がる）、"
+                   "進め方（①各部のKPIと要望の説明 ②論点整理と調整 ③予算案のとりまとめ）を短く伝え、"
                    "最初の部署に説明をお願いしてください。")
 
         for d in self.depts:
             if d.key == "finance":
-                instr = ("管理部門の要望を説明したうえで、ここまでの各部の要望を合計すると上限を"
-                         "どれだけ超えるかを指摘し、経理・財務部としての調整の考え方を述べてください。")
+                instr = ("自部署のKPIと要望を説明したうえで、ここまでの各部の要望を合計すると枠を"
+                         "どれだけ超えるかを指摘し、原価を下げる余地も含めて、調整の考え方を述べてください。")
             else:
-                instr = ("自部署の来年度の予算要望を説明してください。要望額、いちばん大事な施策と"
-                         "その効果、他部署にお願いしたいことがあればそれも。")
+                instr = ("自部署の来期のKPIと、それを達成するための施策費の要望を説明してください。"
+                         "要望額、いちばん大事な施策とその効果、他部署にお願いしたいことがあればそれも。")
             self.speak(d, "要望説明", instr)
 
         self.speak(self.facilitator, "論点整理",
@@ -243,12 +247,12 @@ class Meeting:
                        "ほかの部の案に賛成・懸念があれば一言触れてください。")
 
         self.speak(self.facilitator, "調整案",
-                   f"ここまでの調整案をもとに、部署ごとの配分額と合計（上限{self.cap}億円以内）を"
-                   "口頭で示してください。下期の条件付き予備費を置くかどうかも決めてください。")
+                   "ここまでの調整案をもとに、原価を下げる工夫で施策費の枠がいくらになるかを確認し、"
+                   "部署ごとの配分額と合計を口頭で示してください。下期の条件付き予備費を置くかどうかも決めてください。")
 
         self.speak(self.finance(), "確認",
-                   "進行役の調整案を、合計が上限以内か、黒字化の見込みに無理がないかの観点で確認し、"
-                   "了承するか、条件をつけて了承するかを述べてください。")
+                   f"進行役の調整案を、営業利益{p['profit_target']}{u}以上を守れるか、原価の見込みに無理がないか、"
+                   "売上1.2倍の達成に響かないかの観点で確認し、了承するか、条件をつけて了承するかを述べてください。")
 
         budget = self.final_budget()
         self.speak(self.facilitator, "閉会",
@@ -260,7 +264,8 @@ class Meeting:
         prompt = (f"# 議事録\n{self.transcript_text()}\n\n"
                   "# 依頼\n会議で合意した内容を予算案にまとめてください。"
                   "部署は議事録に出てきた順に、要望額は各部の資料の値、配分額は会議で合意した値を使う。"
-                  f"total は配分額の合計＋予備費で、{self.cap}億円以内にすること。金額の単位は億円。")
+                  "total は配分額の合計＋予備費。cost_of_sales は基準の原価から会議で合意した削減を引いた値。"
+                  f"金額の単位は{self.plan['unit']}。")
         with self.client.beta.messages.stream(
             model=MODEL,
             max_tokens=16000,
@@ -277,30 +282,46 @@ class Meeting:
         budget = json.loads(next(b.text for b in msg.content if b.type == "text"))
 
         # AIの足し算を鵜呑みにしない
-        computed = round(sum(i["allocated"] for i in budget["items"]) + budget["reserve"], 2)
-        budget["total_check"] = {"computed": computed, "matches": abs(computed - budget["total"]) < 0.005,
-                                 "within_cap": computed <= self.cap + 1e-9}
-        print(budget_markdown(budget, self.cap))
+        budget["total_check"] = check_budget(budget, self.plan)
+        print(budget_markdown(budget, self.plan))
         return budget
 
 
 # --------------------------------------------------------------------------- 出力
 
-def budget_markdown(b: dict, cap: float) -> str:
+def check_budget(b: dict, plan: dict) -> dict:
+    """AIの足し算をそのまま信じず、合計と営業利益をプログラムで計算する。"""
+    total = round(sum(i["allocated"] for i in b["items"]) + b["reserve"], 2)
+    profit = round(plan["revenue"] - b["cost_of_sales"] - plan["fixed_sga"] - total, 2)
+    return {"computed": total, "matches": abs(total - b["total"]) < 0.005,
+            "operating_profit": profit, "profit_ok": profit >= plan["profit_target"] - 1e-9}
+
+
+def budget_markdown(b: dict, plan: dict) -> str:
+    u = plan["unit"]
+    chk = b.get("total_check") or check_budget(b, plan)
     rows = ["| 部署 | 要望額 | 配分額 | 増減 | 調整の内容 |", "|---|---:|---:|---:|---|"]
     for i in b["items"]:
         diff = i["allocated"] - i["requested"]
         rows.append(f"| {i['department']} | {i['requested']:.2f} | {i['allocated']:.2f} | "
                     f"{diff:+.2f} | {i['changes']} |")
     req = sum(i["requested"] for i in b["items"])
-    alloc = sum(i["allocated"] for i in b["items"])
     if b["reserve"]:
         rows.append(f"| 予備費（下期・条件付き） | – | {b['reserve']:.2f} | | {b['reserve_condition']} |")
-    rows.append(f"| **合計** | **{req:.2f}** | **{alloc + b['reserve']:.2f}** | | 上限 {cap:.1f}億円 |")
-    chk = b["total_check"]
-    note = "" if chk["matches"] and chk["within_cap"] else \
-        f"\n\n> ⚠ 合計の確認：計算上 {chk['computed']}億円（AIの記載 {b['total']}億円、上限内: {chk['within_cap']}）"
-    out = [f"## 2027年度 予算案（単位：億円）\n\n{b['summary']}\n", "\n".join(rows) + note,
+    rows.append(f"| **合計** | **{req:.2f}** | **{chk['computed']:.2f}** | | |")
+    pl = ["| 項目 | 金額 |", "|---|---:|",
+          f"| 売上 | {plan['revenue']:.2f} |",
+          f"| 原価 | {b['cost_of_sales']:.2f}（基準 {plan['base_cost']:.2f}） |",
+          f"| 固定費 | {plan['fixed_sga']:.2f} |",
+          f"| 施策費 | {chk['computed']:.2f} |",
+          f"| **営業利益** | **{chk['operating_profit']:.2f}**（目標 {plan['profit_target']:.2f} 以上） |"]
+    warn = []
+    if not chk["matches"]:
+        warn.append(f"> ⚠ 施策費の合計：計算上 {chk['computed']}（AIの記載 {b['total']}）")
+    if not chk["profit_ok"]:
+        warn.append(f"> ⚠ 営業利益が目標に届いていません（{chk['operating_profit']}）")
+    out = [f"## 来期の施策費の配分案（単位：{u}）\n\n{b['summary']}\n", "\n".join(rows),
+           f"\n### 来期の損益の見込み（単位：{u}）\n\n原価：{b['cost_notes']}\n", "\n".join(pl), *warn,
            "\n### 決まったこと", *[f"- {d}" for d in b["decisions"]],
            "\n### 宿題", *[f"- {a['owner']}：{a['task']}（{a['due']}）" for a in b["action_items"]]]
     return "\n".join(out)
@@ -320,7 +341,7 @@ def transcript_markdown(m: Meeting) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--topic", default="2027年度の部門予算案を決める")
+    ap.add_argument("--topic", default="2027年度の施策予算を決める（売上1.2倍に向けて）")
     ap.add_argument("--drive-folder", help="資料を置いた Google ドライブのフォルダID")
     ap.add_argument("--docs", type=Path, default=HERE / "sample_docs", help="ローカルの資料フォルダ")
     ap.add_argument("--roles", type=Path, default=HERE / "roles.yaml")
@@ -331,12 +352,12 @@ def main() -> None:
     docs = load_drive_docs(args.drive_folder) if args.drive_folder else load_local_docs(args.docs)
     facilitator, depts = build_members(roles, docs)
 
-    meeting = Meeting(anthropic.Anthropic(), args.topic, roles["budget_cap"], facilitator, depts)
+    meeting = Meeting(anthropic.Anthropic(), args.topic, roles["plan"], facilitator, depts)
     budget = meeting.run()
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "transcript.md").write_text(transcript_markdown(meeting), encoding="utf-8")
-    (args.out / "budget.md").write_text(budget_markdown(budget, roles["budget_cap"]), encoding="utf-8")
+    (args.out / "budget.md").write_text(budget_markdown(budget, roles["plan"]), encoding="utf-8")
     (args.out / "meeting.json").write_text(
         json.dumps({"topic": args.topic, "log": meeting.log, "budget": budget},
                    ensure_ascii=False, indent=2), encoding="utf-8")
