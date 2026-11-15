@@ -72,6 +72,13 @@ tr.total td { font-weight: 700 }
 .pill { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; background: var(--tint) }
 .pill.ok { color: var(--good) } .pill.ng { color: var(--warn) }
 ul.tight { margin: 0; padding-left: 1.2em }
+.boss { position: sticky; bottom: env(safe-area-inset-bottom, 0px); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; box-shadow: 0 -6px 18px rgba(0,0,0,.06) }
+.boss.waiting { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) }
+.boss .row { display: flex; gap: 8px; align-items: flex-end }
+.boss textarea { flex: 1; min-width: 0; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); color: var(--ink); resize: vertical; min-height: 44px }
+.boss .hint { font-size: 12px; color: var(--muted) }
+.msg.human .bubble { border-color: var(--accent) }
+.msg.human .bubble .name { color: var(--accent) }
 </style>
 
 <div class="wrap">
@@ -98,12 +105,13 @@ ul.tight { margin: 0; padding-left: 1.2em }
       </select>
     </label>
     <button id="copy" disabled>議事録をコピー</button>
+    <label class="small" for="pause"><input type="checkbox" id="pause" checked> 論点整理のあとで社長の意見を待つ</label>
   </div>
   <div class="controls">
     <span class="source" id="source">資料：ページに入っている7つの資料（Googleドライブと同じ内容）</span>
     <button id="drive">Googleドライブから読み込む</button>
   </div>
-  <div class="notice" id="notice">「会議を始める」を押すと、あなたの Claude の利用枠で 18回 Claude に問い合わせます（最初に許可を求められます）。速さ優先なら数分、じっくり考えるなら10分ほどかかります。</div>
+  <div class="notice" id="notice">「会議を始める」を押すと、あなたの Claude の利用枠で 18回 Claude に問い合わせます（最初に許可を求められます）。速さ優先なら数分、じっくり考えるなら10分ほどかかります。会議中は、画面下の欄から社長として発言できます。</div>
 
   <div class="room">
     <aside class="people" id="people" aria-label="参加者"></aside>
@@ -112,6 +120,14 @@ ul.tight { margin: 0; padding-left: 1.2em }
     </section>
   </div>
   <section class="result" id="result" hidden></section>
+  <section class="boss" id="boss" aria-label="社長として発言する">
+    <div class="hint" id="bossHint">会議が始まったら、社長（あなた）としていつでも発言できます。発言は、いま話しているAIの次の番から議論に入ります。</div>
+    <div class="row">
+      <textarea id="bossText" rows="2" placeholder="例：ギフト機能は年末の応援シーズン前に必ず出したい。そのためなら広告をもっと削ってかまわない" disabled></textarea>
+      <button class="primary" id="bossSend" disabled>社長として発言</button>
+      <button id="bossSkip" hidden>続ける</button>
+    </div>
+  </section>
 </div>
 
 <script id="data" type="application/json">__DATA__</script>
@@ -138,8 +154,17 @@ for (const r of ROLES) {
   d.querySelector("small").textContent = r.fac ? "進行役" : "待機中";
   els.people.append(d);
 }
+const BOSS = { key: "boss", name: "社長（あなた）", ch: "社", color: "B5462E", human: true };
+{
+  const d = document.createElement("div");
+  d.className = "person"; d.id = "p-boss";
+  d.innerHTML = `<div class="av" style="--c:#${BOSS.color}">${BOSS.ch}</div><div class="who"><b>社長（あなた）</b><small>人間</small></div>`;
+  els.people.prepend(d);
+}
 const role = (key) => ROLES.find((r) => r.key === key);
 function setSpeaking(key, label) {
+  const bp = $("p-boss");
+  if (bp) { bp.classList.toggle("speaking", key === "boss"); bp.querySelector("small").textContent = key === "boss" ? label : "人間"; }
   for (const r of ROLES) {
     const p = $("p-" + r.key);
     p.classList.toggle("speaking", r.key === key);
@@ -159,7 +184,7 @@ function addBubble(r, phase) {
   $("empty").hidden = true;
   addPhase(phase);
   const m = document.createElement("div");
-  m.className = "msg" + (r.fac ? " fac" : "");
+  m.className = "msg" + (r.fac ? " fac" : "") + (r.human ? " human" : "");
   m.innerHTML = `<div class="av" style="--c:#${r.color}">${r.ch}</div><div class="bubble"><div class="name"><span></span></div><div class="text thinking">考えています…</div></div>`;
   m.querySelector(".name span").textContent = r.name;
   els.feed.append(m);
@@ -176,6 +201,7 @@ function setBusy(b) {
   running = b;
   $("start").disabled = b; $("replay").disabled = b; $("drive").disabled = b; $("tier").disabled = b;
   $("stop").disabled = !b;
+  $("pause").disabled = b;
   if (!b) setSpeaking(null);
 }
 function say(text, err) { els.notice.textContent = text; els.notice.classList.toggle("err", !!err); }
@@ -199,6 +225,7 @@ function rolePrompt(r) {
 - 数字は、下の資料にあるものか、会議でほかの人が言ったものだけを使う。資料にない数字を作らない
 - ほかの人の発言に触れるときは「〇〇部さんの〜」と名前を出す
 - 自分の部署の立場で話すが、全社の目標は共有している
+- 議事録の「社長」は、この会議に参加している人間の社長（決定権者）。社長の発言があれば最優先で受け止め、自分の立場からどう応えるか（賛成・懸念・代わりの案）を必ず述べる
 - 発言の先頭に自分の部署名や「：」は付けない。発言だけを書く
 
 # あなたが持っている資料
@@ -224,7 +251,51 @@ function steps() {
 let sample = null;
 use("sample").then((s) => { sample = s; if (!s) { $("start").disabled = true; say("この画面では AI を呼び出せません。「見本を再生」で見本の議事録を表示できます。"); } });
 
+// ---------- 社長（人間）の発言
+let bossQueue = [];        // まだ議事録に入れていない社長の発言
+let bossWaiter = null;     // 論点整理のあとで社長の発言を待っているとき
+let curPhase = "開会";
+function setBossEnabled(on) {
+  $("bossText").disabled = !on; $("bossSend").disabled = !on;
+  $("bossHint").textContent = on
+    ? "社長（あなた）として発言できます。発言は、いま話しているAIの次の番から議論に入ります。"
+    : "会議が始まったら、社長（あなた）としていつでも発言できます。";
+}
+function flushBoss() {
+  const n = bossQueue.length;
+  for (const text of bossQueue) log.push({ phase: curPhase, speaker: "社長", text });
+  bossQueue = [];
+  return n;
+}
+$("bossSend").onclick = () => {
+  const text = $("bossText").value.trim();
+  if (!text || $("bossSend").disabled) return;
+  $("bossText").value = "";
+  const el = addBubble(BOSS, curPhase);
+  el.classList.remove("thinking"); el.textContent = text;
+  bossQueue.push(text);
+  if (bossWaiter) { const w = bossWaiter; bossWaiter = null; w(); }
+  else say("社長の発言を受け付けました。次に話すAIから、この発言をふまえて議論します。");
+};
+$("bossText").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $("bossSend").click(); }
+});
+$("bossSkip").onclick = () => { if (bossWaiter) { const w = bossWaiter; bossWaiter = null; w(); } };
+function waitForBoss() {
+  setSpeaking("boss", "発言を待っています");
+  $("boss").classList.add("waiting"); $("bossSkip").hidden = false;
+  say("論点整理が終わりました。社長として意見があれば下の欄から発言してください。なければ「続ける」を押してください。");
+  $("bossText").focus();
+  return new Promise((resolve, reject) => {
+    bossWaiter = resolve;
+    ctl.signal.addEventListener("abort", () => { bossWaiter = null; reject({ code: "cancelled" }); }, { once: true });
+  }).finally(() => { $("boss").classList.remove("waiting"); $("bossSkip").hidden = true; say("会議中です。発言は1人ずつ、その場でAIが考えて書いています。"); });
+}
+
 async function speak(r, phase, instr, opts) {
+  curPhase = phase;
+  const bossSince = flushBoss() > 0;   // 直前に社長の発言が入ったときだけ、すぐ次の人がまず応える
+  if (bossSince) instr = "直前の議論に社長（人間・決定権者）の発言があります。まず社長の発言に応えてから、次のことをしてください。\n" + instr;
   setSpeaking(r.key, "考え中…");
   const el = addBubble(r, phase);
   const input = rolePrompt(r) + `\n\n# ここまでの議事録\n${transcript()}\n\n# 今のあなたの番\n${instr}`;
@@ -235,6 +306,7 @@ async function speak(r, phase, instr, opts) {
 }
 
 async function finalBudget(opts) {
+  flushBoss();
   const fac = ROLES.find((r) => r.fac);
   setSpeaking(fac.key, "配分案を作成中…");
   const depts = ROLES.filter((r) => !r.fac).map((r) => r.name);
@@ -244,7 +316,7 @@ async function finalBudget(opts) {
 ${transcript()}
 
 # 依頼
-会議で合意した内容を配分案にまとめてください。JSONだけで答えること。形式：
+会議で合意した内容を配分案にまとめてください。社長の発言があれば、その指示を反映すること。JSONだけで答えること。形式：
 {"summary": "考え方を2〜3文で", "items": [{"department": "部署名", "requested": 要望額, "allocated": 配分額, "changes": "要望から何をどう変えたか1文"}], "reserve": 予備費（無ければ0）, "reserve_condition": "予備費を出す条件（無ければ空文字）", "cost_of_sales": 会議で合意した工夫を反映した来期の原価, "cost_notes": "原価を基準${PLAN.base_cost}${u}からどう変えたか1文", "total": 配分額の合計＋予備費, "decisions": ["決まったこと"], "action_items": [{"owner": "部署名", "task": "宿題"}]}
 部署は ${depts.join("、")} の順。要望額は各部の資料の値、配分額は会議で合意した値。金額の単位は${u}の数値。`;
   return sample.json(prompt, { ...opts, cache: false, signal: ctl.signal });
@@ -253,11 +325,15 @@ ${transcript()}
 $("start").onclick = async () => {
   if (!sample || running) return;
   resetFeed(); setBusy(true); ctl = new AbortController();
+  bossQueue = []; bossWaiter = null; curPhase = "開会"; setBossEnabled(true);
   const opts = { modelTier: $("tier").value };
-  say("会議中です。発言は1人ずつ、その場でAIが考えて書いています。");
+  say("会議中です。発言は1人ずつ、その場でAIが考えて書いています。下の欄から社長として割り込めます。");
   const all = steps();
   try {
-    for (let i = 0; i < all.length - 1; i++) await speak(...all[i], opts);
+    for (let i = 0; i < all.length - 1; i++) {
+      await speak(...all[i], opts);
+      if (all[i][1] === "論点整理" && $("pause").checked) { curPhase = "社長の意見"; await waitForBoss(); }
+    }
     const b = await finalBudget(opts);
     renderBudget(b, false);
     await speak(...all[all.length - 1], opts);
@@ -274,6 +350,7 @@ $("start").onclick = async () => {
     if (t) t.textContent = e?.text || "（中断）";
     say(msgs[e?.code] || "途中で通信が切れました。もう一度「会議を始める」を押してください。", e?.code !== "cancelled");
   } finally {
+    flushBoss(); setBossEnabled(false);
     setBusy(false); $("copy").disabled = log.length === 0;
   }
 };
