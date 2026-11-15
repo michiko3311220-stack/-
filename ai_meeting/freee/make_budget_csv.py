@@ -1,4 +1,7 @@
-"""AI会議（ライブ実行1）の確定予算を、freee 予実管理に取り込む下書きCSVにする。
+"""AI会議（ライブ実行1）の確定予算の一覧（部門×勘定科目×月）。
+
+ここで出すCSVは確認用の一覧で、freee にはそのまま取り込めない。freee に取り込むときは、
+freee からダウンロードした雛形に fill_freee_template.py で金額を書き込む。
 
 列：部門, 勘定科目, 施策, 4月..3月（円）, 合計
 - 部門別の内訳と月の配り方は、議事録で決まっていない部分を仮に置いている（ITEMS のコメント参照）
@@ -45,23 +48,28 @@ def spread(yen, months):
     out[months[-1]] += yen - base * len(months)
     return out
 
-rows = []
-for dept, account, item, oku, months in ITEMS:
-    yen = round(oku * OKU)
-    m = spread(yen, months)
-    assert sum(m) == yen
-    rows.append([dept, account, item, *m, yen])
+def main():
+  rows = []
+  for dept, account, item, oku, months in ITEMS:
+      yen = round(oku * OKU)
+      m = spread(yen, months)
+      assert sum(m) == yen
+      rows.append([dept, account, item, *m, yen])
 
-total = sum(r[-1] for r in rows)
-assert total == 5 * OKU, total
-HEADER = ["部門", "勘定科目", "施策", *MONTHS, "合計"]
-here = Path(__file__).resolve().parent
-for name, enc in [("freee_予算_2027年度_下書き_utf8.csv", "utf-8-sig"), ("freee_予算_2027年度_下書き_sjis.csv", "cp932")]:
-    with open(here / name, "w", newline="", encoding=enc) as f:
-        w = csv.writer(f)
-        w.writerow(HEADER)
-        w.writerows(rows)
-print("合計", f"{total:,}円", "行数", len(rows))
-by = {}
-for r in rows: by[r[0]] = by.get(r[0], 0) + r[-1]
-for k, v in by.items(): print(k, f"{v/OKU:.2f}億円")
+  total = sum(r[-1] for r in rows)
+  assert total == 5 * OKU, total
+  HEADER = ["部門", "勘定科目", "施策", *MONTHS, "合計"]
+  here = Path(__file__).resolve().parent
+  for name, enc in [("freee_予算_2027年度_下書き_utf8.csv", "utf-8-sig"), ("freee_予算_2027年度_下書き_sjis.csv", "cp932")]:
+      with open(here / name, "w", newline="", encoding=enc) as f:
+          w = csv.writer(f)
+          w.writerow(HEADER)
+          w.writerows(rows)
+  print("合計", f"{total:,}円", "行数", len(rows))
+  by = {}
+  for r in rows: by[r[0]] = by.get(r[0], 0) + r[-1]
+  for k, v in by.items(): print(k, f"{v/OKU:.2f}億円")
+
+
+if __name__ == "__main__":
+    main()
